@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, Text, TextInput, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { useStore } from '../lib/store';
@@ -79,8 +79,6 @@ export default function WordsScreen({ onPlay }: { onPlay: () => void }) {
         {!typing && flash && <Text style={{ color: flash.bad ? t.bad : t.good, fontWeight: '700' }}>{flash.text}</Text>}
       </View>
 
-      {!typing && !loading && mine.length === 0 && <Starter lang={lang} saved={saved} onSave={save} onPlay={onPlay} />}
-
       {!typing && mine.length > 0 && (
         <>
           {due > 0 && (
@@ -90,8 +88,15 @@ export default function WordsScreen({ onPlay }: { onPlay: () => void }) {
               <Text style={{ color: t.accentInk, fontWeight: '800' }}>Jugar →</Text>
             </Pressable>
           )}
-          <ForYou lang={lang} count={mine.length} onSave={save} />
-          <Starter lang={lang} saved={saved} onSave={save} onPlay={onPlay} more />
+          <ForYou lang={lang} count={mine.length} onSave={save} saved={saved} />
+        </>
+      )}
+
+      {/* Un único panel de temas: no se reinicia al añadir la primera palabra */}
+      {!typing && !loading && <Starter lang={lang} saved={saved} onSave={save} onPlay={onPlay} more={mine.length > 0} />}
+
+      {!typing && mine.length > 0 && (
+        <>
           <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: 36 }}>
             {searching ? (
               <TextInput value={q} onChangeText={setQ} autoFocus placeholder="Buscar…" placeholderTextColor={t.muted} autoCapitalize="none"
@@ -131,33 +136,67 @@ export default function WordsScreen({ onPlay }: { onPlay: () => void }) {
   );
 }
 
-/** Primeras palabras: 6 por tema cuando aún no tienes ninguna */
+/** Palabras por tema: 6 cada vez, sin repetir las que ya tienes guardadas */
 function Starter({ lang, saved, onSave, onPlay, more }: { lang: Lang; saved: Set<string>; onSave: (t: string) => Promise<string>; onPlay: () => void; more?: boolean }) {
   const t = useTheme();
   const { profile } = useStore();
   const [topic, setTopic] = useState<string>(TOPICS[0].v);
-  const [page, setPage] = useState(1);
-  const [items, setItems] = useState<Sugg[] | null>(null);
+  const [pool, setPool] = useState<Sugg[]>([]);       // todas las palabras recibidas de este tema
+  const [nextPage, setNextPage] = useState(1);
+  const [done, setDone] = useState(false);             // el servidor ya no da más páginas
+  const [fetching, setFetching] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [skipped, setSkipped] = useState<Set<string>>(new Set()); // las que pasaste con «Otras 6»
+  const [addedHere, setAddedHere] = useState<Set<string>>(new Set()); // añadidas aquí: se quedan con ✓
   const [busy, setBusy] = useState(false);
+  const inflight = useRef(false);
+  const gen = useRef(0); // cambia con el tema: descarta respuestas de un tema anterior
 
+  const firstRun = useRef(true);
+  // Al cambiar de tema, idioma o nivel se empieza de cero (no al abrir, para no pedir dos veces lo mismo)
   useEffect(() => {
-    let alive = true;
-    setItems(null); setFailed(false);
-    supabase.functions.invoke('starter', { body: { lang, level: profile.level, topic, page } }).then(({ data, error }) => {
-      if (!alive) return;
-      if (error || !data?.words) setFailed(true); else setItems(data.words);
-    });
-    return () => { alive = false; };
-  }, [lang, topic, page, profile.level]);
+    if (firstRun.current) { firstRun.current = false; return; }
+    gen.current++;
+    setPool([]); setNextPage(1); setDone(false); setFailed(false); setSkipped(new Set()); setAddedHere(new Set());
+  }, [lang, topic, profile.level]);
 
-  const missing = (items || []).filter((w) => !saved.has(norm(w.term)));
+  const visible = pool
+    .filter((w) => !skipped.has(norm(w.term)) && (!saved.has(norm(w.term)) || addedHere.has(norm(w.term))))
+    .slice(0, 6);
+
+  // Pide más páginas hasta tener 6 palabras que aún no tienes (máximo 10 páginas por tema)
+  useEffect(() => {
+    if (visible.length >= 6 || done || failed || nextPage > 10 || inflight.current) return;
+    inflight.current = true;
+    setFetching(true);
+    const g = gen.current;
+    supabase.functions.invoke('starter', { body: { lang, level: profile.level, topic, page: nextPage } }).then(({ data, error }) => {
+      inflight.current = false;
+      setFetching(false);
+      if (g !== gen.current) return;
+      if (error || !Array.isArray(data?.words)) { if (nextPage === 1) setFailed(true); else setDone(true); return; }
+      if (!data.words.length) { setDone(true); return; }
+      setPool((p) => {
+        const have = new Set(p.map((w) => norm(w.term)));
+        return [...p, ...data.words.filter((w: Sugg) => !have.has(norm(w.term)))];
+      });
+      setNextPage((n) => n + 1);
+    });
+  }, [visible.length, done, fetching, failed, nextPage, lang, topic, profile.level]);
+
+  const add = async (term: string) => {
+    setAddedHere((s) => new Set(s).add(norm(term)));
+    return onSave(term);
+  };
+  const missing = visible.filter((w) => !saved.has(norm(w.term)));
   const addAll = async () => {
     setBusy(true);
-    for (const w of missing) { const r = await onSave(w.term); if (r === 'limit') break; }
+    for (const w of missing) { const r = await add(w.term); if (r === 'limit') break; }
     setBusy(false);
     onPlay();
   };
+  const otherSix = () => setSkipped((s) => { const n = new Set(s); visible.forEach((w) => n.add(norm(w.term))); return n; });
+  const loadingFirst = !visible.length && !failed && !(done || nextPage > 10);
 
   return (
     <View style={{ gap: 12 }}>
@@ -166,12 +205,15 @@ function Starter({ lang, saved, onSave, onPlay, more }: { lang: Lang; saved: Set
         <Text style={{ color: t.muted }}>{more ? 'Elige un tema y añade las que quieras:' : 'Empieza con estas. Elige un tema:'}</Text>
       </View>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-        {TOPICS.map((x) => <Chip key={x.v} label={x.l} on={topic === x.v} onPress={() => { setTopic(x.v); setPage(1); }} />)}
+        {TOPICS.map((x) => <Chip key={x.v} label={x.l} on={topic === x.v} onPress={() => setTopic(x.v)} />)}
       </View>
       <View style={{ backgroundColor: t.card, borderRadius: 16, borderWidth: 1, borderColor: t.line, paddingHorizontal: 14 }}>
-        {!items && !failed && <ActivityIndicator color={t.muted} style={{ paddingVertical: 30 }} />}
+        {loadingFirst && <ActivityIndicator color={t.muted} style={{ paddingVertical: 30 }} />}
         {failed && <Text style={{ color: t.muted, paddingVertical: 20 }}>No se pudieron cargar las sugerencias. Escribe tú una palabra arriba.</Text>}
-        {items?.map((w, i) => {
+        {!visible.length && !failed && (done || nextPage > 10) && (
+          <Text style={{ color: t.muted, paddingVertical: 20 }}>Ya tienes todas las palabras de este tema. Prueba con otro.</Text>
+        )}
+        {visible.map((w, i) => {
           const has = saved.has(norm(w.term));
           return (
             <View key={w.term} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 11, borderTopWidth: i ? 1 : 0, borderColor: t.line }}>
@@ -180,18 +222,21 @@ function Starter({ lang, saved, onSave, onPlay, more }: { lang: Lang; saved: Set
                 <Text style={{ color: t.muted, fontSize: 14 }} numberOfLines={1}>{w.translation}</Text>
               </View>
               <Speaker onPress={() => say(w.term, lang)} />
-              <Pressable onPress={() => !has && onSave(w.term)} disabled={has} accessibilityRole="button" accessibilityLabel={has ? 'Añadida' : `Añadir ${w.term}`}
+              <Pressable onPress={() => !has && add(w.term)} disabled={has} accessibilityRole="button" accessibilityLabel={has ? 'Añadida' : `Añadir ${w.term}`}
                 style={{ width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: has ? t.goodSoft : t.accent }}>
                 <Text style={{ color: has ? t.good : t.accentInk, fontWeight: '800', fontSize: 17 }}>{has ? '✓' : '+'}</Text>
               </Pressable>
             </View>
           );
         })}
+        {fetching && visible.length > 0 && visible.length < 6 && <ActivityIndicator color={t.muted} style={{ paddingVertical: 10 }} />}
       </View>
-      {!!items?.length && (
+      {visible.length > 0 && (
         <>
           <Btn big kind="accent" title={busy ? 'Añadiendo…' : missing.length ? (more ? `Añadir las ${missing.length} y jugar` : 'Añadir las que faltan y jugar') : 'Jugar'} onPress={missing.length ? addAll : onPlay} disabled={busy} />
-          <Text onPress={() => setPage(page + 1)} accessibilityRole="button" style={{ color: t.blue, fontWeight: '700', textAlign: 'center' }}>Otras 6 ›</Text>
+          {!(done || nextPage > 10) || pool.some((w) => !skipped.has(norm(w.term)) && !saved.has(norm(w.term)) && !visible.includes(w)) ? (
+            <Text onPress={otherSix} accessibilityRole="button" style={{ color: t.blue, fontWeight: '700', textAlign: 'center' }}>Otras 6 ›</Text>
+          ) : null}
         </>
       )}
     </View>
@@ -199,7 +244,7 @@ function Starter({ lang, saved, onSave, onPlay, more }: { lang: Lang; saved: Set
 }
 
 /** Sugerencias «Para ti»: se calculan una vez por semana en el servidor */
-function ForYou({ lang, count, onSave }: { lang: Lang; count: number; onSave: (t: string) => Promise<string> }) {
+function ForYou({ lang, count, onSave, saved }: { lang: Lang; count: number; onSave: (t: string) => Promise<string>; saved: Set<string> }) {
   const t = useTheme();
   const { session } = useStore();
   const [items, setItems] = useState<Sugg[]>([]);
@@ -219,14 +264,14 @@ function ForYou({ lang, count, onSave }: { lang: Lang; count: number; onSave: (t
     supabase.from('user_suggestions').update({ items: next }).eq('user_id', session.user.id).eq('lang', lang).eq('week', mondayUTC()).then(() => null);
   };
 
-  if (!items.length) return null;
+  if (!items.some((s) => !saved.has(norm(s.term)))) return null;
   return (
     <View style={{ gap: 8 }}>
       <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' }}>
         <Text style={{ color: t.ink, fontWeight: '800', fontSize: 16 }}>Para ti</Text>
         <Text style={{ color: t.muted, fontSize: 13 }}>Según tus palabras y tu nivel</Text>
       </View>
-      {items.slice(0, show).map((s) => (
+      {items.filter((s) => !saved.has(norm(s.term))).slice(0, show).map((s) => (
         <View key={s.term} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: t.card, borderRadius: 14, borderWidth: 1, borderColor: t.line, padding: 12 }}>
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text style={{ color: t.ink, fontWeight: '800', fontSize: 16 }}>{s.term}</Text>
@@ -242,7 +287,7 @@ function ForYou({ lang, count, onSave }: { lang: Lang; count: number; onSave: (t
           </Pressable>
         </View>
       ))}
-      {items.length > show && (
+      {items.filter((s) => !saved.has(norm(s.term))).length > show && (
         <Text onPress={() => setShow(show + 3)} accessibilityRole="button" style={{ color: t.blue, fontWeight: '700', textAlign: 'center', paddingVertical: 4 }}>Ver más sugerencias</Text>
       )}
     </View>
