@@ -62,7 +62,7 @@ export default function AuthScreen() {
       setBusy(true);
       const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
       setBusy(false);
-      if (error) setMsg({ text: error.message.includes('Email not confirmed') ? 'Confirma tu email con el enlace que te enviamos y vuelve a entrar.' : 'Email o contraseña incorrectos.' });
+      if (error) setMsg({ text: error.message.includes('Email not confirmed') ? 'Confirma tu email con el enlace que te enviamos y vuelve a entrar.' : 'Email o contraseña incorrectos. Si te registraste con Google, usa «Continuar con Google».' });
       return;
     }
     if (!canSignUp) return;
