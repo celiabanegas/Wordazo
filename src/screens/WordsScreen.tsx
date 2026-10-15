@@ -91,6 +91,7 @@ export default function WordsScreen({ onPlay }: { onPlay: () => void }) {
             </Pressable>
           )}
           <ForYou lang={lang} count={mine.length} onSave={save} />
+          <Starter lang={lang} saved={saved} onSave={save} onPlay={onPlay} more />
           <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: 36 }}>
             {searching ? (
               <TextInput value={q} onChangeText={setQ} autoFocus placeholder="Buscar…" placeholderTextColor={t.muted} autoCapitalize="none"
@@ -131,7 +132,7 @@ export default function WordsScreen({ onPlay }: { onPlay: () => void }) {
 }
 
 /** Primeras palabras: 6 por tema cuando aún no tienes ninguna */
-function Starter({ lang, saved, onSave, onPlay }: { lang: Lang; saved: Set<string>; onSave: (t: string) => Promise<string>; onPlay: () => void }) {
+function Starter({ lang, saved, onSave, onPlay, more }: { lang: Lang; saved: Set<string>; onSave: (t: string) => Promise<string>; onPlay: () => void; more?: boolean }) {
   const t = useTheme();
   const { profile } = useStore();
   const [topic, setTopic] = useState<string>(TOPICS[0].v);
@@ -161,8 +162,8 @@ function Starter({ lang, saved, onSave, onPlay }: { lang: Lang; saved: Set<strin
   return (
     <View style={{ gap: 12 }}>
       <View style={{ gap: 2 }}>
-        <Text style={{ color: t.ink, fontWeight: '800', fontSize: 18 }}>¿No se te ocurre ninguna?</Text>
-        <Text style={{ color: t.muted }}>Empieza con estas. Elige un tema:</Text>
+        <Text style={{ color: t.ink, fontWeight: '800', fontSize: more ? 16 : 18 }}>{more ? 'Descubre palabras por tema' : '¿No se te ocurre ninguna?'}</Text>
+        <Text style={{ color: t.muted }}>{more ? 'Elige un tema y añade las que quieras:' : 'Empieza con estas. Elige un tema:'}</Text>
       </View>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
         {TOPICS.map((x) => <Chip key={x.v} label={x.l} on={topic === x.v} onPress={() => { setTopic(x.v); setPage(1); }} />)}
@@ -189,7 +190,7 @@ function Starter({ lang, saved, onSave, onPlay }: { lang: Lang; saved: Set<strin
       </View>
       {!!items?.length && (
         <>
-          <Btn big kind="accent" title={busy ? 'Añadiendo…' : missing.length ? 'Añadir las que faltan y jugar' : 'Jugar'} onPress={missing.length ? addAll : onPlay} disabled={busy} />
+          <Btn big kind="accent" title={busy ? 'Añadiendo…' : missing.length ? (more ? `Añadir las ${missing.length} y jugar` : 'Añadir las que faltan y jugar') : 'Jugar'} onPress={missing.length ? addAll : onPlay} disabled={busy} />
           <Text onPress={() => setPage(page + 1)} accessibilityRole="button" style={{ color: t.blue, fontWeight: '700', textAlign: 'center' }}>Otras 6 ›</Text>
         </>
       )}
