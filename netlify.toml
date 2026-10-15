@@ -1,0 +1,13 @@
+# Netlify compila la web automáticamente en cada cambio de GitHub
+[build]
+  command = "npm run build:web"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+# El service worker no debe guardarse en caché, para que las actualizaciones lleguen enseguida
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache"
