@@ -48,13 +48,21 @@ export default function PlayScreen({ onPlay, onAddWords }: { onPlay: (g: Game, o
           transform: [{ scale: pressed ? 0.98 : 1 }] })}>
         <View style={{ gap: 6 }}>
           <Text style={{ color: t.accentInk, fontSize: 44, fontWeight: '800', letterSpacing: -1.2 }}>Elige</Text>
-          <Text style={{ color: t.accentInk, fontSize: 17 }}>15 preguntas · 3 vidas · contra el reloj</Text>
+          <Text style={{ color: t.accentInk, fontSize: 17 }}>{Math.min(15, ready.length)} {Math.min(15, ready.length) === 1 ? 'pregunta' : 'preguntas'} · 3 vidas · contra el reloj</Text>
           {due > 0 && <Text style={{ color: t.accentInk, fontSize: 15, fontWeight: '700', marginTop: 6 }}>Incluye tus {due} {due === 1 ? 'palabra' : 'palabras'} por repasar</Text>}
         </View>
         <View style={{ backgroundColor: t.accentInk, borderRadius: 16, paddingVertical: 16, alignItems: 'center' }}>
           <Text style={{ color: t.accent, fontSize: 19, fontWeight: '800' }}>Jugar</Text>
         </View>
       </Pressable>
+
+      {ready.length < 5 && (
+        <Pressable onPress={onAddWords} accessibilityRole="button" style={{ backgroundColor: t.card, borderRadius: 14, borderWidth: 1, borderColor: t.line, padding: 12 }}>
+          <Text style={{ color: t.ink }}>
+            Tienes {ready.length} {ready.length === 1 ? 'palabra' : 'palabras'}: cada ronda las pregunta una vez. <Text style={{ color: t.blue, fontWeight: '800' }}>Añade más</Text> para rondas más largas.
+          </Text>
+        </Pressable>
+      )}
 
       {hard.length > 0 && (
         <Pressable onPress={() => onPlay('choice', { hardOnly: true })} accessibilityRole="button"

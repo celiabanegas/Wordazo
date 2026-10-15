@@ -60,10 +60,9 @@ export default function ChoiceGame({ onExit, challengeId, hardOnly }: { onExit: 
 
   const initialQueue = useMemo(() => {
     const base0 = hardOnly ? shuffle(pool.filter(isHard)) : shuffle(pool).sort((a, b) => Number(isDue(b)) - Number(isDue(a)) || a.box - b.box);
-    const size = hardOnly ? Math.min(10, Math.max(base0.length * 2, 5)) : ROUND;
-    const base = base0.slice(0, size);
-    while (base.length < Math.min(size, Math.max(pool.length * 2, 6)) && base0.length) base.push(...shuffle(base0).slice(0, size - base.length));
-    return base.slice(0, size);
+    // Cada palabra sale como mucho una vez por ronda (más una segunda oportunidad si la fallas).
+    // Con pocas palabras, la ronda es más corta en lugar de repetir la misma una y otra vez.
+    return base0.slice(0, hardOnly ? 10 : ROUND);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roundKey, pool.length, hardOnly]);
 
@@ -137,7 +136,8 @@ export default function ChoiceGame({ onExit, challengeId, hardOnly }: { onExit: 
     }
   };
   const requeue = () => {
-    if (q && !q.retry) setQueue((qq) => { const c = qq.slice(); c.splice(Math.min(c.length, i + 3), 0, { word: q.word, retry: true }); return c; });
+    // Solo se repite si quedan al menos 2 preguntas por medio (así no sale la misma justo después)
+    if (q && !q.retry && queue.length - i > 2) setQueue((qq) => { const c = qq.slice(); c.splice(Math.min(c.length, i + 3), 0, { word: q.word, retry: true }); return c; });
   };
 
   const answer = (opt: string | null) => {
