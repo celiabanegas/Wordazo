@@ -3,7 +3,7 @@ import { ActivityIndicator, Platform, Pressable, ScrollView, Text, TextInput, Vi
 import { supabase } from '../lib/supabase';
 import { useTheme } from '../lib/theme';
 import { LANGS, LANG_ORDER, LEVELS, type Lang, type Level } from '../lib/langs';
-import { maskDate, parseBirthdate } from '../lib/password';
+import { cleanUsername, maskDate, parseBirthdate, usernameValid } from '../lib/password';
 import { siteOrigin } from '../lib/links';
 import { SITE_URL } from '../lib/config';
 import type { Profile } from '../lib/types';
@@ -216,6 +216,52 @@ export function GuardianApproveScreen({ token, onClose }: { token: string; onClo
           <Btn kind="ghost" title="Ir a Wordazo" onPress={finish} style={{ marginTop: 12 }} />
         </View>
       )}
+    </Shell>
+  );
+}
+
+/** Elegir nombre de usuario (quien entra con Google o tenía cuenta de antes) */
+export function UsernameScreen({ profile, onSave }: { profile: Profile; onSave: (p: Partial<Profile>) => Promise<void> }) {
+  const t = useTheme();
+  const suggestion = cleanUsername((profile.display_name || '').replace(/\s+/g, '.'));
+  const [u, setU] = useState(suggestion);
+  const [state, setState] = useState<'idle' | 'checking' | 'ok' | 'taken' | 'bad'>('idle');
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    if (!u) { setState('idle'); return; }
+    if (!usernameValid(u)) { setState('bad'); return; }
+    setState('checking');
+    const id = setTimeout(async () => {
+      const { data, error } = await supabase.rpc('username_available', { p_username: u });
+      setState(error ? 'idle' : data ? 'ok' : 'taken');
+    }, 400);
+    return () => clearTimeout(id);
+  }, [u]);
+  const save = async () => {
+    setBusy(true);
+    await onSave({ username: u });
+    setBusy(false);
+    setState('taken'); // si sigue aquí es que no se pudo guardar
+  };
+  return (
+    <Shell>
+      <Logo size={28} />
+      <View style={{ gap: 6, marginTop: 20 }}>
+        <Text style={{ color: t.ink, fontSize: 26, fontWeight: '800' }}>Elige tu nombre de usuario</Text>
+        <Text style={{ color: t.muted, fontSize: 15 }}>Tus amigos te buscarán con él para retarte.</Text>
+      </View>
+      <Field label="Nombre de usuario"
+        hint={state === 'ok' ? `@${u} está libre` : state === 'taken' ? `@${u} ya está cogido. Prueba otro.` : state === 'bad' ? 'De 3 a 20 caracteres: letras, números, punto o guion bajo' : state === 'checking' ? 'Comprobando…' : undefined}
+        hintColor={state === 'ok' ? t.good : state === 'taken' || state === 'bad' ? t.bad : t.muted}>
+        <View>
+          <Text style={{ position: 'absolute', left: 14, top: 13, fontSize: 17, color: t.muted, zIndex: 1 }}>@</Text>
+          <TextInput style={[inputStyle(t, state === 'ok' ? 'ok' : state === 'taken' ? 'bad' : undefined), { paddingLeft: 32 }]} value={u}
+            onChangeText={(v) => setU(cleanUsername(v))} autoCapitalize="none" autoCorrect={false} placeholder="tu_nombre" placeholderTextColor={t.muted} maxLength={20} />
+        </View>
+      </Field>
+      <View style={{ flex: 1 }} />
+      <Btn big kind="accent" title={busy ? 'Guardando…' : 'Continuar'} disabled={state !== 'ok' || busy} onPress={save} />
+      <Text onPress={signOut} style={{ color: t.muted, textAlign: 'center', fontWeight: '700' }}>Cerrar sesión</Text>
     </Shell>
   );
 }

@@ -54,6 +54,7 @@ export type Profile = {
   reminder_hour: number;
   tz: string;
   onboarded: boolean;
+  username: string | null;
   created_at: string;
 };
 

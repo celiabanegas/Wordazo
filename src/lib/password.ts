@@ -37,3 +37,8 @@ export function ageFrom(iso: string) {
   if (n.getMonth() < b.getMonth() || (n.getMonth() === b.getMonth() && n.getDate() < b.getDate())) a--;
   return a;
 }
+
+/** Nombre de usuario: minúsculas, números, punto y guion bajo (3 a 20 caracteres) */
+export const cleanUsername = (s: string) =>
+  s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/^@/, '').replace(/[^a-z0-9_.]/g, '').slice(0, 20);
+export const usernameValid = (s: string) => /^[a-z0-9_.]{3,20}$/.test(s);

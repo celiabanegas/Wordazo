@@ -11,7 +11,7 @@ import { ageFrom } from './src/lib/password';
 import { readUrlParams, takePending } from './src/lib/links';
 import type { Profile } from './src/lib/types';
 import AuthScreen, { NewPasswordScreen } from './src/screens/AuthScreen';
-import { BirthdateScreen, GuardianApproveScreen, GuardianScreen, LanguageScreen } from './src/screens/Onboarding';
+import { BirthdateScreen, GuardianApproveScreen, GuardianScreen, LanguageScreen, UsernameScreen } from './src/screens/Onboarding';
 import WordsScreen from './src/screens/WordsScreen';
 import PlayScreen, { type Game } from './src/screens/PlayScreen';
 import ChoiceGame from './src/screens/ChoiceGame';
@@ -70,7 +70,10 @@ function Gate({ session }: { session: Session }) {
       const birth = typeof meta.birthdate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(meta.birthdate) ? meta.birthdate : null;
       const first = String(meta.full_name || meta.name || '').trim().split(/\s+/).slice(0, 2).join(' ').slice(0, 30);
       const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Madrid';
-      ({ data: p, error } = await supabase.from('profiles').insert({ birthdate: birth, display_name: first, tz }).select('*').single());
+      const uname = typeof meta.username === 'string' && /^[a-z0-9_.]{3,20}$/.test(meta.username) ? meta.username : null;
+      ({ data: p, error } = await supabase.from('profiles').insert({ birthdate: birth, display_name: first, tz, username: uname }).select('*').single());
+      // Si alguien cogió ese nombre de usuario justo antes, se crea sin él y se pide otro
+      if (error?.code === '23505' && uname) ({ data: p, error } = await supabase.from('profiles').insert({ birthdate: birth, display_name: first, tz }).select('*').single());
     }
     if (error || !p) return setFailed(true);
     const { data: c } = await supabase.from('guardian_consents').select('status').maybeSingle();
@@ -91,6 +94,7 @@ function Gate({ session }: { session: Session }) {
   if (ageFrom(profile.birthdate) < 14 && consent !== 'approved') {
     return <GuardianScreen profile={profile} onRecheck={load} onName={(n) => patch({ display_name: n })} />;
   }
+  if (!profile.username) return <UsernameScreen profile={profile} onSave={patch} />;
   if (!profile.onboarded) return <LanguageScreen profile={profile} onSave={patch} />;
   return <StoreProvider session={session} initialProfile={profile}><Main /></StoreProvider>;
 }

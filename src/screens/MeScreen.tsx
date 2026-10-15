@@ -69,6 +69,7 @@ export default function MeScreen() {
         <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
           <View style={{ flex: 1 }}>
             <Text style={{ color: t.ink, fontSize: 32, fontWeight: '800', letterSpacing: -0.8 }}>{profile.display_name.split(' ')[0] || 'Tú'}</Text>
+            {!!profile.username && <Text style={{ color: t.ink, fontWeight: '700' }}>@{profile.username}</Text>}
             <Text style={{ color: t.muted }}>Aprende {LANGS[lang].name.toLowerCase()} desde el {since.getDate()} de {MONTHS[since.getMonth()]}</Text>
           </View>
           <Pressable onPress={() => setSettings(true)} accessibilityRole="button" accessibilityLabel="Ajustes"

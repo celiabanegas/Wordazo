@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Platform, Pressable, ScrollView, Share, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, ScrollView, Share, Text, TextInput, View } from 'react-native';
 import { useStore } from '../lib/store';
 import { useTheme } from '../lib/theme';
 import { supabase } from '../lib/supabase';
@@ -7,9 +7,15 @@ import { siteOrigin } from '../lib/links';
 import { SITE_URL } from '../lib/config';
 import { LANGS } from '../lib/langs';
 import type { Challenge } from '../lib/types';
-import { Btn, Card, Label } from '../components/ui';
+import { Btn, Card, Label, inputStyle } from '../components/ui';
+import { cleanUsername } from '../lib/password';
 
-type Row = { user_id: string; name: string; week_xp: number; is_me: boolean };
+type Row = { user_id: string; name: string; username: string | null; week_xp: number; is_me: boolean };
+type Req = { from_user: string; name: string; username: string | null };
+const SEND_MSG: Record<string, string> = {
+  sent: 'Solicitud enviada. Cuando la acepte, aparecerá en tu liga.', friends: '¡Ya sois amigos!', not_found: 'No existe nadie con ese nombre de usuario.',
+  self: 'Ese eres tú 🙂', already: 'Ya sois amigos.', limit: 'Has enviado muchas solicitudes hoy. Prueba mañana.', inactive: 'Tu cuenta aún no está activa.',
+};
 const COLORS = ['#7C5CFF', '#1E8A55', '#F06A1D', '#2F5BD3', '#C2383A', '#0E8C8C'];
 const hoursLeft = (iso: string) => Math.max(0, Math.ceil((new Date(iso).getTime() - Date.now()) / 3600000));
 
@@ -21,11 +27,15 @@ export default function FriendsScreen({ onPlayChallenge }: { onPlayChallenge: (i
   const [link, setLink] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<string | null>(null);
+  const [requests, setRequests] = useState<Req[]>([]);
+  const [search, setSearch] = useState('');
+  const [sendMsg, setSendMsg] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const [{ data: l }, { data: c }] = await Promise.all([supabase.rpc('league'), supabase.rpc('my_challenges')]);
+    const [{ data: l }, { data: c }, { data: r }] = await Promise.all([supabase.rpc('friends_league'), supabase.rpc('my_challenges'), supabase.rpc('my_friend_requests')]);
     setLeague((l as Row[]) || []);
     setChallenges((c as Challenge[]) || []);
+    setRequests((r as Req[]) || []);
   }, []);
   useEffect(() => { load(); }, [load]);
 
@@ -52,6 +62,20 @@ export default function FriendsScreen({ onPlayChallenge }: { onPlayChallenge: (i
     if (c.lang !== lang) await updateProfile({ current_lang: c.lang, langs: profile.langs.includes(c.lang) ? profile.langs : [...profile.langs, c.lang] });
     onPlayChallenge(c.id);
   };
+  const sendRequest = async () => {
+    const u = cleanUsername(search);
+    if (!u) return;
+    const { data, error } = await supabase.rpc('send_friend_request', { p_username: u });
+    setSendMsg(error ? 'No se pudo enviar. Revisa la conexión.' : SEND_MSG[data as string] ?? 'No se pudo enviar.');
+    if (data === 'sent' || data === 'friends') setSearch('');
+    if (data === 'friends') load();
+  };
+  const answer = async (from: string, accept: boolean) => {
+    setRequests((r) => r.filter((x) => x.from_user !== from));
+    await supabase.rpc('answer_friend_request', { p_from: from, p_accept: accept });
+    if (accept) load();
+  };
+
   const removeFriend = async (id: string) => {
     if (confirm !== id) return setConfirm(id);
     setConfirm(null);
@@ -70,6 +94,29 @@ export default function FriendsScreen({ onPlayChallenge }: { onPlayChallenge: (i
   return (
     <ScrollView contentContainerStyle={{ padding: 16, gap: 14, maxWidth: 640, width: '100%', alignSelf: 'center' }}>
       <Text style={{ color: t.ink, fontSize: 26, fontWeight: '800', letterSpacing: -0.5 }}>Amigos</Text>
+
+      <View style={{ gap: 8 }}>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <View style={{ flex: 1 }}>
+            <Text style={{ position: 'absolute', left: 14, top: 13, fontSize: 17, color: t.muted, zIndex: 1 }}>@</Text>
+            <TextInput style={[inputStyle(t), { paddingLeft: 32 }]} value={search} onChangeText={(v) => { setSearch(cleanUsername(v)); setSendMsg(null); }}
+              placeholder="Añadir por nombre de usuario" placeholderTextColor={t.muted} autoCapitalize="none" autoCorrect={false} onSubmitEditing={sendRequest} />
+          </View>
+          <Btn title="Añadir" kind="accent" onPress={sendRequest} disabled={search.length < 3} />
+        </View>
+        {sendMsg && <Text style={{ color: t.muted }}>{sendMsg}</Text>}
+      </View>
+
+      {requests.map((r) => (
+        <View key={r.from_user} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: t.card, borderRadius: 14, borderWidth: 1, borderColor: t.line, padding: 12 }}>
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: t.ink, fontWeight: '800' }}>{r.name} quiere ser tu amigo</Text>
+            {!!r.username && <Text style={{ color: t.muted }}>@{r.username}</Text>}
+          </View>
+          <Btn title="Aceptar" kind="good" onPress={() => answer(r.from_user, true)} style={{ paddingVertical: 9, paddingHorizontal: 12 }} />
+          <Btn title="No" kind="ghost" onPress={() => answer(r.from_user, false)} style={{ paddingVertical: 9, paddingHorizontal: 12 }} />
+        </View>
+      ))}
 
       {toPlay.map((c) => (
         <View key={c.id} style={{ backgroundColor: t.accent, borderRadius: 18, padding: 14, gap: 8 }}>
@@ -102,7 +149,7 @@ export default function FriendsScreen({ onPlayChallenge }: { onPlayChallenge: (i
       {!league ? <ActivityIndicator color={t.muted} /> : friends.length === 0 ? (
         <Card style={{ gap: 6, alignItems: 'center' }}>
           <Text style={{ color: t.ink, fontWeight: '800', fontSize: 16 }}>Aún no tienes amigos aquí</Text>
-          <Text style={{ color: t.muted, textAlign: 'center' }}>Reta a alguien o invítale con tu enlace. Cuando lo abra, apareceréis en la liga del otro.</Text>
+          <Text style={{ color: t.muted, textAlign: 'center' }}>Búscale por su nombre de usuario arriba, o invítale con tu enlace.</Text>
         </Card>
       ) : (
         <Card style={{ paddingVertical: 4 }}>
@@ -113,7 +160,10 @@ export default function FriendsScreen({ onPlayChallenge }: { onPlayChallenge: (i
               <View style={{ width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center', backgroundColor: r.is_me ? t.ink : COLORS[k % COLORS.length] }}>
                 <Text style={{ color: r.is_me ? t.bg : '#fff', fontWeight: '800' }}>{(r.is_me ? 'Tú' : r.name)[0]}</Text>
               </View>
-              <Text style={{ flex: 1, color: t.ink, fontWeight: '700' }}>{r.is_me ? 'Tú' : r.name}</Text>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={{ color: t.ink, fontWeight: '700' }}>{r.is_me ? 'Tú' : r.name}</Text>
+                {!!r.username && <Text style={{ color: t.muted, fontSize: 12 }}>@{r.username}</Text>}
+              </View>
               <Text style={{ color: t.ink, fontWeight: '700', fontVariant: ['tabular-nums'] }}>{r.week_xp.toLocaleString('es-ES')} XP</Text>
               {!r.is_me && (
                 <Text onPress={() => removeFriend(r.user_id)} accessibilityRole="button" style={{ color: confirm === r.user_id ? t.bad : t.muted, fontSize: 12, fontWeight: '700', paddingLeft: 4 }}>
@@ -130,7 +180,8 @@ export default function FriendsScreen({ onPlayChallenge }: { onPlayChallenge: (i
       <Btn kind="ghost" title="Invitar con mi enlace" onPress={invite} />
       {note && <Text style={{ color: t.muted, textAlign: 'center' }}>{note}</Text>}
       {link && <Text selectable style={{ color: t.blue, textAlign: 'center', fontSize: 13 }}>{link}</Text>}
-      <Text style={{ color: t.muted, fontSize: 12, textAlign: 'center' }}>Tus amigos solo ven tu nombre de pila y tus puntos de la semana. No hay chat.</Text>
+      {!!profile.username && <Text style={{ color: t.ink, textAlign: 'center', fontWeight: '700' }}>Tu usuario: @{profile.username}</Text>}
+      <Text style={{ color: t.muted, fontSize: 12, textAlign: 'center' }}>Para ser amigos, la otra persona tiene que aceptar. Tus amigos solo ven tu nombre de pila, tu usuario y tus puntos de la semana. No hay chat.</Text>
     </ScrollView>
   );
 }

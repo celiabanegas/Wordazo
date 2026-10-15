@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { useTheme } from '../lib/theme';
-import { checkPassword, maskDate, parseBirthdate } from '../lib/password';
+import { checkPassword, cleanUsername, maskDate, parseBirthdate, usernameValid } from '../lib/password';
 import { Btn, Field, inputStyle, Logo } from '../components/ui';
 import InstallBanner from '../components/InstallBanner';
 
@@ -16,6 +16,8 @@ export default function AuthScreen() {
   const [password, setPassword] = useState('');
   const [password2, setPassword2] = useState('');
   const [birth, setBirth] = useState('');
+  const [username, setUsername] = useState('');
+  const [uState, setUState] = useState<'idle' | 'checking' | 'ok' | 'taken' | 'bad'>('idle');
   const [show, setShow] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ text: string; ok?: boolean } | null>(null);
@@ -24,7 +26,19 @@ export default function AuthScreen() {
   const match = password2.length > 0 && password2 === password;
   const birthIso = parseBirthdate(birth);
   const emailOk = /^\S+@\S+\.\S+$/.test(email.trim());
-  const canSignUp = emailOk && pw.valid && match && !!birthIso;
+  const canSignUp = emailOk && pw.valid && match && !!birthIso && uState === 'ok';
+
+  // Comprueba si el nombre de usuario está libre mientras se escribe
+  useEffect(() => {
+    if (mode !== 'up' || !username) { setUState('idle'); return; }
+    if (!usernameValid(username)) { setUState('bad'); return; }
+    setUState('checking');
+    const id = setTimeout(async () => {
+      const { data, error } = await supabase.rpc('username_available', { p_username: username });
+      setUState(error ? 'idle' : data ? 'ok' : 'taken');
+    }, 400);
+    return () => clearTimeout(id);
+  }, [username, mode]);
 
   const go = (m: Mode) => { setMode(m); setMsg(null); };
 
@@ -55,11 +69,13 @@ export default function AuthScreen() {
     setBusy(true);
     const { data, error } = await supabase.auth.signUp({
       email: email.trim(), password,
-      options: { emailRedirectTo: origin(), data: { birthdate: birthIso } },
+      options: { emailRedirectTo: origin(), data: { birthdate: birthIso, username } },
     });
     setBusy(false);
     if (error) setMsg({ text: error.message.toLowerCase().includes('registered') ? 'Ese email ya tiene cuenta. Entra con él.' : 'No se pudo crear la cuenta. Revisa los datos e inténtalo de nuevo.' });
-    else if (!data.session) setMsg({ text: 'Te hemos enviado un email. Abre el enlace para confirmar tu cuenta y vuelve a entrar.', ok: true });
+    // Si el email ya estaba registrado, Supabase no lo dice ni envía nada: lo detectamos aquí
+    else if (data.user && (data.user.identities?.length ?? 0) === 0) setMsg({ text: 'Ese email ya tiene cuenta. Entra con «Continuar con Google» o con tu contraseña en «Entrar».' });
+    else if (!data.session) setMsg({ text: 'Te hemos enviado un email. Abre el enlace para confirmar tu cuenta y vuelve a entrar. Si no llega, mira en la carpeta de spam.', ok: true });
   };
 
   const eye = (
@@ -115,6 +131,18 @@ export default function AuthScreen() {
           <TextInput style={inputStyle(t)} value={email} onChangeText={setEmail} autoCapitalize="none" autoComplete="email" keyboardType="email-address"
             textContentType="emailAddress" placeholder="tu@email.com" placeholderTextColor={t.muted} />
         </Field>
+
+        {mode === 'up' && (
+          <Field label="Nombre de usuario"
+            hint={uState === 'ok' ? `@${username} está libre` : uState === 'taken' ? `@${username} ya está cogido. Prueba otro.` : uState === 'bad' ? 'De 3 a 20 caracteres: letras, números, punto o guion bajo' : uState === 'checking' ? 'Comprobando…' : 'Tus amigos te buscarán con este nombre'}
+            hintColor={uState === 'ok' ? t.good : uState === 'taken' || uState === 'bad' ? t.bad : t.muted}>
+            <View>
+              <Text style={{ position: 'absolute', left: 14, top: 13, fontSize: 17, color: t.muted, zIndex: 1 }}>@</Text>
+              <TextInput style={[inputStyle(t, uState === 'ok' ? 'ok' : uState === 'taken' ? 'bad' : undefined), { paddingLeft: 32 }]} value={username}
+                onChangeText={(v) => setUsername(cleanUsername(v))} autoCapitalize="none" autoCorrect={false} placeholder="tu_nombre" placeholderTextColor={t.muted} maxLength={20} />
+            </View>
+          </Field>
+        )}
 
         {mode !== 'forgot' && (
           <Field label="Contraseña">
