@@ -1,5 +1,5 @@
 import type { Stats, Word } from './types';
-import { todayStr } from './text';
+import { shuffle, todayStr } from './text';
 
 // Repaso espaciado: días hasta el siguiente repaso según la caja (1–5)
 export const INTERVAL_DAYS = [0, 0, 1, 3, 7, 21];
@@ -59,3 +59,22 @@ export function liveStreak(s: Stats) {
   return s.last_day === today || s.last_day === todayStr(y) ? s.streak : 0;
 }
 export const todayXp = (s: Stats) => (s.last_day === todayStr() ? s.today_xp : 0);
+
+/** Palabras con las que se puede jugar en un idioma (las que sacaste del juego no cuentan). */
+export const playable = (words: Word[], deck: string) =>
+  words.filter((w) => w.deck === deck && w.status === 'ok' && w.meaning && !w.archived);
+
+export const ROUND_SIZE = 15;
+// Última ronda de Elige: Tarjetas y Escribe repasan esas mismas palabras
+let lastRound: { deck: string; ids: string[] } | null = null;
+export const rememberRound = (deck: string, ids: string[]) => { lastRound = { deck, ids }; };
+
+/** Elige, Tarjetas y Escribe eligen las palabras igual: primero las que tocan repasar, luego las menos sabidas. */
+export function pickRound(pool: Word[], deck: string, n = ROUND_SIZE, reuse = false): Word[] {
+  if (reuse && lastRound?.deck === deck) {
+    const byId = new Map(pool.map((w) => [w.id, w]));
+    const same = lastRound.ids.map((id) => byId.get(id)).filter((w): w is Word => !!w);
+    if (same.length) return shuffle(same);
+  }
+  return shuffle(pool).sort((a, b) => Number(isDue(b)) - Number(isDue(a)) || a.box - b.box).slice(0, n);
+}

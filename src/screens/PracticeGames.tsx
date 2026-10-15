@@ -3,8 +3,8 @@ import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { useStore } from '../lib/store';
 import { useTheme } from '../lib/theme';
-import { acceptedAnswers, cap, capList, norm, shuffle, stripEs } from '../lib/text';
-import { isDue, regrade } from '../lib/progress';
+import { acceptedAnswers, cap, capList, norm, stripEs } from '../lib/text';
+import { pickRound, playable, regrade, ROUND_SIZE } from '../lib/progress';
 import type { Deck, Word } from '../lib/types';
 import { Bar, Btn, Card, Speaker } from '../components/ui';
 import { say } from '../lib/speech';
@@ -16,10 +16,8 @@ function useRound(deck: Deck) {
   const { words } = useStore();
   const [key, setKey] = useState(0);
   const queue = useMemo(() => {
-    const pool = words.filter((w) => w.deck === deck && w.status === 'ok' && w.meaning && !w.archived);
-    const due = shuffle(pool.filter(isDue));
-    const rest = shuffle(pool.filter((w) => !isDue(w))).sort((a, b) => a.box - b.box);
-    return due.concat(rest).slice(0, 10);
+    // Las mismas palabras que la última ronda de Elige (o, si aún no has jugado, elegidas igual que en Elige)
+    return pickRound(playable(words, deck), deck, ROUND_SIZE, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, deck]);
   return { queue, again: () => setKey((k) => k + 1) };

@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, Text, TextInput, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useStore } from '../lib/store';
 import { useTheme } from '../lib/theme';
 import { suggest } from '../lib/suggest';
-import { cap, capList, norm } from '../lib/text';
+import { cap, capList, norm, shuffle } from '../lib/text';
 import { isDue } from '../lib/progress';
 import { say } from '../lib/speech';
 import { supabase } from '../lib/supabase';
@@ -152,21 +153,28 @@ function Starter({ lang, saved, onSave, onPlay, more }: { lang: Lang; saved: Set
   const inflight = useRef(false);
   const gen = useRef(0); // cambia con el tema: descarta respuestas de un tema anterior
 
-  const firstRun = useRef(true);
-  // Al cambiar de tema, idioma o nivel se empieza de cero (no al abrir, para no pedir dos veces lo mismo)
+  const [ready, setReady] = useState(false);           // ya se han leído las que viste otros días
+  const seenKey = `wz-vistas-${lang}-${profile.level}-${topic}`;
+
+  // Al cambiar de tema, idioma o nivel se empieza de cero, recordando las que ya pasaste con «Otras 6»
   useEffect(() => {
-    if (firstRun.current) { firstRun.current = false; return; }
     gen.current++;
-    setPool([]); setNextPage(1); setDone(false); setFailed(false); setSkipped(new Set()); setAddedHere(new Set());
-  }, [lang, topic, profile.level]);
+    const g = gen.current;
+    setPool([]); setNextPage(1); setDone(false); setFailed(false); setSkipped(new Set()); setAddedHere(new Set()); setReady(false);
+    AsyncStorage.getItem(seenKey)
+      .then((v) => { if (g === gen.current && v) setSkipped(new Set(JSON.parse(v))); })
+      .catch(() => {})
+      .finally(() => { if (g === gen.current) setReady(true); });
+  }, [seenKey]);
 
   const visible = pool
     .filter((w) => !skipped.has(norm(w.term)) && (!saved.has(norm(w.term)) || addedHere.has(norm(w.term))))
     .slice(0, 6);
+  const exhausted = done || nextPage > 10;
 
-  // Pide más páginas hasta tener 6 palabras que aún no tienes (máximo 10 páginas por tema)
+  // Pide más páginas (24 palabras cada una) hasta tener 6 que aún no tienes ni has pasado
   useEffect(() => {
-    if (visible.length >= 6 || done || failed || nextPage > 10 || inflight.current) return;
+    if (!ready || visible.length >= 6 || exhausted || failed || inflight.current) return;
     inflight.current = true;
     setFetching(true);
     const g = gen.current;
@@ -178,11 +186,22 @@ function Starter({ lang, saved, onSave, onPlay, more }: { lang: Lang; saved: Set
       if (!data.words.length) { setDone(true); return; }
       setPool((p) => {
         const have = new Set(p.map((w) => norm(w.term)));
-        return [...p, ...data.words.filter((w: Sugg) => !have.has(norm(w.term)))];
+        return [...p, ...shuffle(data.words as Sugg[]).filter((w) => !have.has(norm(w.term)))];
       });
       setNextPage((n) => n + 1);
     });
-  }, [visible.length, done, fetching, failed, nextPage, lang, topic, profile.level]);
+  }, [ready, visible.length, exhausted, fetching, failed, nextPage, lang, topic, profile.level]);
+
+  // Si ya no hay más palabras nuevas pero quedan algunas que pasaste, se vuelven a ofrecer
+  const leftover = pool.filter((w) => skipped.has(norm(w.term)) && !saved.has(norm(w.term)));
+  useEffect(() => {
+    if (ready && exhausted && !fetching && visible.length === 0 && leftover.length > 0) saveSkipped(new Set());
+  }, [ready, exhausted, fetching, visible.length, leftover.length]);
+
+  const saveSkipped = (n: Set<string>) => {
+    setSkipped(n);
+    AsyncStorage.setItem(seenKey, JSON.stringify([...n].slice(-400))).catch(() => {});
+  };
 
   const add = async (term: string) => {
     setAddedHere((s) => new Set(s).add(norm(term)));
@@ -195,8 +214,8 @@ function Starter({ lang, saved, onSave, onPlay, more }: { lang: Lang; saved: Set
     setBusy(false);
     onPlay();
   };
-  const otherSix = () => setSkipped((s) => { const n = new Set(s); visible.forEach((w) => n.add(norm(w.term))); return n; });
-  const loadingFirst = !visible.length && !failed && !(done || nextPage > 10);
+  const otherSix = () => { const n = new Set(skipped); visible.forEach((w) => n.add(norm(w.term))); saveSkipped(n); };
+  const loadingFirst = !visible.length && !failed && (!exhausted || leftover.length > 0);
 
   return (
     <View style={{ gap: 12 }}>
@@ -210,7 +229,7 @@ function Starter({ lang, saved, onSave, onPlay, more }: { lang: Lang; saved: Set
       <View style={{ backgroundColor: t.card, borderRadius: 16, borderWidth: 1, borderColor: t.line, paddingHorizontal: 14 }}>
         {loadingFirst && <ActivityIndicator color={t.muted} style={{ paddingVertical: 30 }} />}
         {failed && <Text style={{ color: t.muted, paddingVertical: 20 }}>No se pudieron cargar las sugerencias. Escribe tú una palabra arriba.</Text>}
-        {!visible.length && !failed && (done || nextPage > 10) && (
+        {!visible.length && !failed && exhausted && !leftover.length && (
           <Text style={{ color: t.muted, paddingVertical: 20 }}>Ya tienes todas las palabras de este tema. Prueba con otro.</Text>
         )}
         {visible.map((w, i) => {
@@ -234,7 +253,7 @@ function Starter({ lang, saved, onSave, onPlay, more }: { lang: Lang; saved: Set
       {visible.length > 0 && (
         <>
           <Btn big kind="accent" title={busy ? 'Añadiendo…' : missing.length ? (more ? `Añadir las ${missing.length} y jugar` : 'Añadir las que faltan y jugar') : 'Jugar'} onPress={missing.length ? addAll : onPlay} disabled={busy} />
-          {!(done || nextPage > 10) || pool.some((w) => !skipped.has(norm(w.term)) && !saved.has(norm(w.term)) && !visible.includes(w)) ? (
+          {!exhausted || pool.some((w) => !saved.has(norm(w.term)) && !visible.includes(w)) ? (
             <Text onPress={otherSix} accessibilityRole="button" style={{ color: t.blue, fontWeight: '700', textAlign: 'center' }}>Otras 6 ›</Text>
           ) : null}
         </>

@@ -5,14 +5,14 @@ import { useStore } from '../lib/store';
 import { useTheme } from '../lib/theme';
 import { supabase } from '../lib/supabase';
 import { cap, shortMeaning, shuffle, norm } from '../lib/text';
-import { isDue, regrade } from '../lib/progress';
+import { ROUND_SIZE, pickRound, playable, regrade, rememberRound } from '../lib/progress';
 import { say } from '../lib/speech';
 import { SPANISH_DECOYS, SPANISH_DEF_DECOYS } from '../lib/distractors';
 import { isHard, type Deck, type Word } from '../lib/types';
 import { Bar, Btn, Speaker } from '../components/ui';
 import RoundSummary, { type RoundResult } from './RoundSummary';
 
-const ROUND = 15;
+const ROUND = ROUND_SIZE;
 const LIVES = 3;
 const SECONDS = 10;
 const comboMult = (combo: number) => Math.min(4, 1 + Math.floor(combo / 3));
@@ -55,14 +55,15 @@ function buildQuestion(word: Word, pool: Word[], deck: Deck, retry: boolean): Q 
 export default function ChoiceGame({ onExit, challengeId, hardOnly }: { onExit: () => void; challengeId?: string; hardOnly?: boolean }) {
   const t = useTheme();
   const { words, patchWord, recordProgress, stats, lang: deck } = useStore();
-  const pool = useMemo(() => words.filter((w) => w.deck === deck && w.status === 'ok' && w.meaning && !w.archived), [words, deck]);
+  const pool = useMemo(() => playable(words, deck), [words, deck]);
   const [roundKey, setRoundKey] = useState(0);
 
   const initialQueue = useMemo(() => {
-    const base0 = hardOnly ? shuffle(pool.filter(isHard)) : shuffle(pool).sort((a, b) => Number(isDue(b)) - Number(isDue(a)) || a.box - b.box);
     // Cada palabra sale como mucho una vez por ronda (más una segunda oportunidad si la fallas).
     // Con pocas palabras, la ronda es más corta en lugar de repetir la misma una y otra vez.
-    return base0.slice(0, hardOnly ? 10 : ROUND);
+    const base = hardOnly ? shuffle(pool.filter(isHard)).slice(0, 10) : pickRound(pool, deck, ROUND);
+    rememberRound(deck, base.map((w) => w.id)); // Tarjetas y Escribe repasarán estas mismas
+    return base;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roundKey, pool.length, hardOnly]);
 

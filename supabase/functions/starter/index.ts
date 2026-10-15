@@ -1,7 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
-// Paquetes de 6 palabras para empezar, por idioma, nivel y tema.
+// Paquetes de palabras para empezar, por idioma, nivel y tema.
 // Se generan una sola vez y se guardan: no cuestan nada por usuario.
 const LANG: Record<string, string> = { en: "inglés", fr: "francés", de: "alemán", it: "italiano", pt: "portugués", es: "español" };
 const TOPICS: Record<string, string> = {
@@ -66,24 +66,43 @@ Deno.serve(async (req) => {
     page = Math.max(1, Math.min(10, Number(b.page) || 1));
   } catch { return json({ error: "bad_request" }, 400); }
 
+  // Cada página trae 24 palabras variadas. Se guardan como página 100+n (versión 2; las antiguas de 6 repetían mucho).
   const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
-  const { data: rows } = await admin.from("starter_packs").select("page, words").eq("lang", lang).eq("native", "es").eq("level", level).eq("topic", topic);
-  const hit = rows?.find((r) => r.page === page);
+  const { data: rows } = await admin.from("starter_packs").select("page, words").eq("lang", lang).eq("native", "es").eq("level", level).eq("topic", topic).gt("page", 100);
+  const hit = rows?.find((r) => r.page === 100 + page);
   if (hit) return json({ words: hit.words });
+  if (page > 1 && !rows?.some((r) => r.page === 99 + page)) return json({ words: [] }); // hay que pedirlas en orden
 
-  const before = (rows ?? []).filter((r) => r.page < page).flatMap((r) => (r.words as { term: string }[]).map((w) => w.term));
-  const p = lang === "es"
-    ? `Propón 6 palabras cultas del español, poco usadas en el día a día, que un joven de nivel ${LEVEL[level]} podría encontrarse en textos sobre ${TOPICS[topic]}.`
-    : `Propón 6 palabras o expresiones de ${LANG[lang]} útiles y actuales para un hispanohablante joven de nivel ${LEVEL[level]} sobre ${TOPICS[topic]}.`;
+  const before = (rows ?? []).filter((r) => r.page < 100 + page).flatMap((r) => (r.words as { term: string }[]).map((w) => w.term));
+  const what = lang === "es"
+    ? `24 palabras cultas del español, poco usadas en el día a día, que un joven de nivel ${LEVEL[level]} podría encontrarse en textos sobre ${TOPICS[topic]}`
+    : `24 palabras o expresiones de ${LANG[lang]} útiles y actuales para un hispanohablante joven de nivel ${LEVEL[level]} sobre ${TOPICS[topic]}`;
   let text = "";
-  try { text = await askAI(`${p}${before.length ? ` Que no sean ninguna de estas: ${before.join(", ")}.` : ""}
-Responde SOLO con JSON: {"words":[{"term":"palabra","translation":"${lang === "es" ? "definición breve" : "traducción breve al español"}"}]}`, 400); }
+  try { text = await askAI(`Propón ${what}.
+Variedad obligatoria: unos 9 sustantivos, 6 verbos, 5 adjetivos y 4 expresiones. Cada una de una familia distinta: nunca dos derivadas de la misma raíz ni variantes de la misma (mal: binge-watch y binge-read; snag a seat y snag a deal). Nada de inventos: solo palabras que se usan de verdad.${before.length ? `
+Ya propuestas antes (no las repitas ni repitas su raíz): ${before.join(", ")}.` : ""}
+Responde SOLO con JSON: {"words":[{"term":"palabra","translation":"${lang === "es" ? "definición breve" : "traducción breve al español"}"}]}`, 1100); }
   catch (e) { console.error(String(e)); return json({ error: String(e).startsWith("Error: missing_key") ? "missing_key" : "upstream" }, 502); }
   try {
     const o = JSON.parse(text.match(/\{[\s\S]*\}/)![0]);
-    const words = (o.words ?? []).map((w: { term?: string; translation?: string }) => ({ term: String(w.term ?? "").trim(), translation: String(w.translation ?? "").trim() }))
-      .filter((w: { term: string }) => w.term).slice(0, 6);
-    if (words.length) await admin.from("starter_packs").upsert({ lang, native: "es", level, topic, page, words });
+    // Raíz aproximada: primera palabra con contenido (sin «to», artículos ni guiones)
+    const STOP = new Set(["to", "a", "an", "the", "be", "get", "go", "le", "la", "les", "l", "un", "une", "der", "die", "das", "ein", "eine", "il", "lo", "o", "os", "as", "el", "los", "las", "una", "se"]);
+    const root = (t: string) => {
+      const parts = t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").split(/[^a-z0-9]+/).filter(Boolean);
+      const w = parts.find((x) => !STOP.has(x)) ?? parts[0] ?? "";
+      return w.slice(0, 6);
+    };
+    const seen = new Set(before.map(root));
+    const words: { term: string; translation: string }[] = [];
+    for (const w of (o.words ?? []) as { term?: string; translation?: string }[]) {
+      const term = String(w.term ?? "").replace(/[\u2010-\u2015]/g, "-").trim();
+      const translation = String(w.translation ?? "").trim();
+      const r = root(term);
+      if (!term || !translation || !r || seen.has(r)) continue;
+      seen.add(r);
+      words.push({ term, translation });
+    }
+    if (words.length >= 6) await admin.from("starter_packs").upsert({ lang, native: "es", level, topic, page: 100 + page, words });
     return json({ words });
   } catch { return json({ error: "bad_reply" }, 502); }
 });
