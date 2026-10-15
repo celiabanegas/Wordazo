@@ -11,7 +11,7 @@ import { ageFrom } from './src/lib/password';
 import { readUrlParams, takePending } from './src/lib/links';
 import type { Profile } from './src/lib/types';
 import AuthScreen, { NewPasswordScreen } from './src/screens/AuthScreen';
-import { BirthdateScreen, GuardianApproveScreen, GuardianScreen, LanguageScreen, UsernameScreen } from './src/screens/Onboarding';
+import { CompleteProfileScreen, GuardianApproveScreen, GuardianScreen, LanguageScreen } from './src/screens/Onboarding';
 import WordsScreen from './src/screens/WordsScreen';
 import PlayScreen, { type Game } from './src/screens/PlayScreen';
 import ChoiceGame from './src/screens/ChoiceGame';
@@ -90,11 +90,10 @@ function Gate({ session }: { session: Session }) {
 
   if (failed) return <Center><Text style={{ color: t.ink, marginBottom: 12 }}>No se pudo cargar tu cuenta.</Text><Text onPress={load} style={{ color: t.blue, fontWeight: '800' }}>Reintentar</Text></Center>;
   if (!profile) return <Center><ActivityIndicator color={t.muted} /></Center>;
-  if (!profile.birthdate) return <BirthdateScreen onSave={(iso) => patch({ birthdate: iso })} />;
+  if (!profile.birthdate || !profile.username) return <CompleteProfileScreen profile={profile} onDone={setProfile} />;
   if (ageFrom(profile.birthdate) < 14 && consent !== 'approved') {
     return <GuardianScreen profile={profile} onRecheck={load} onName={(n) => patch({ display_name: n })} />;
   }
-  if (!profile.username) return <UsernameScreen profile={profile} onSave={patch} />;
   if (!profile.onboarded) return <LanguageScreen profile={profile} onSave={patch} />;
   return <StoreProvider session={session} initialProfile={profile}><Main /></StoreProvider>;
 }

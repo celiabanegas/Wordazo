@@ -265,3 +265,75 @@ export function UsernameScreen({ profile, onSave }: { profile: Profile; onSave: 
     </Shell>
   );
 }
+
+/** Una sola pantalla para lo que falte tras entrar con Google: fecha de nacimiento y/o nombre de usuario */
+export function CompleteProfileScreen({ profile, onDone }: { profile: Profile; onDone: (p: Profile) => void }) {
+  const t = useTheme();
+  const needBirth = !profile.birthdate;
+  const needUser = !profile.username;
+  const [birth, setBirth] = useState('');
+  const [u, setU] = useState(needUser ? cleanUsername((profile.display_name || '').replace(/\s+/g, '.')) : '');
+  const [state, setState] = useState<'idle' | 'checking' | 'ok' | 'taken' | 'bad'>('idle');
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+  const iso = parseBirthdate(birth);
+
+  useEffect(() => {
+    if (!needUser) return;
+    if (!u) { setState('idle'); return; }
+    if (!usernameValid(u)) { setState('bad'); return; }
+    setState('checking');
+    const id = setTimeout(async () => {
+      const { data, error } = await supabase.rpc('username_available', { p_username: u });
+      setState(error ? 'idle' : data ? 'ok' : 'taken');
+    }, 400);
+    return () => clearTimeout(id);
+  }, [u, needUser]);
+
+  const ready = (!needBirth || !!iso) && (!needUser || state === 'ok');
+  const save = async () => {
+    setBusy(true); setMsg('');
+    const patch: Partial<Profile> = {};
+    if (needBirth && iso) patch.birthdate = iso;
+    if (needUser) patch.username = u;
+    const { data, error } = await supabase.from('profiles').update(patch).eq('user_id', profile.user_id).select('*').single();
+    setBusy(false);
+    if (error || !data) {
+      if (error?.code === '23505') { setState('taken'); setMsg(`@${u} ya está cogido. Prueba otro.`); }
+      else setMsg('No se pudo guardar. Revisa la conexión e inténtalo de nuevo.');
+      return;
+    }
+    onDone(data as Profile);
+  };
+
+  return (
+    <Shell>
+      <Logo size={28} />
+      <View style={{ gap: 6, marginTop: 20 }}>
+        <Text style={{ color: t.ink, fontSize: 26, fontWeight: '800' }}>Completa tu perfil</Text>
+        <Text style={{ color: t.muted, fontSize: 15 }}>Solo te lo pedimos una vez.</Text>
+      </View>
+      {needUser && (
+        <Field label="Nombre de usuario"
+          hint={state === 'ok' ? `@${u} está libre` : state === 'taken' ? `@${u} ya está cogido. Prueba otro.` : state === 'bad' ? 'De 3 a 20 caracteres: letras, números, punto o guion bajo' : state === 'checking' ? 'Comprobando…' : 'Tus amigos te buscarán con este nombre'}
+          hintColor={state === 'ok' ? t.good : state === 'taken' || state === 'bad' ? t.bad : t.muted}>
+          <View>
+            <Text style={{ position: 'absolute', left: 14, top: 13, fontSize: 17, color: t.muted, zIndex: 1 }}>@</Text>
+            <TextInput style={[inputStyle(t, state === 'ok' ? 'ok' : state === 'taken' ? 'bad' : undefined), { paddingLeft: 32 }]} value={u}
+              onChangeText={(v) => setU(cleanUsername(v))} autoCapitalize="none" autoCorrect={false} placeholder="tu_nombre" placeholderTextColor={t.muted} maxLength={20} />
+          </View>
+        </Field>
+      )}
+      {needBirth && (
+        <Field label="Fecha de nacimiento" hint={birth.length >= 14 && !iso ? 'Revisa la fecha (día / mes / año)' : 'No se muestra a nadie. La pide la ley de protección de datos.'}
+          hintColor={birth.length >= 14 && !iso ? t.bad : t.muted}>
+          <TextInput style={inputStyle(t)} value={birth} onChangeText={(x) => setBirth(maskDate(x))} placeholder="dd / mm / aaaa" placeholderTextColor={t.muted} keyboardType="number-pad" maxLength={14} />
+        </Field>
+      )}
+      {!!msg && <Text style={{ color: t.bad, fontWeight: '600' }}>{msg}</Text>}
+      <View style={{ flex: 1 }} />
+      <Btn big kind="accent" title={busy ? 'Guardando…' : 'Continuar'} disabled={!ready || busy} onPress={save} />
+      <Text onPress={signOut} style={{ color: t.muted, textAlign: 'center', fontWeight: '700' }}>Cerrar sesión</Text>
+    </Shell>
+  );
+}
