@@ -4,7 +4,7 @@ import * as Haptics from 'expo-haptics';
 import { useStore } from '../lib/store';
 import { useTheme } from '../lib/theme';
 import { suggest } from '../lib/suggest';
-import { norm } from '../lib/text';
+import { cap, capList, norm } from '../lib/text';
 import { isDue } from '../lib/progress';
 import { say } from '../lib/speech';
 import { supabase } from '../lib/supabase';
@@ -18,7 +18,7 @@ const mondayUTC = () => { const d = new Date(); d.setUTCDate(d.getUTCDate() - ((
 
 export default function WordsScreen({ onPlay }: { onPlay: () => void }) {
   const t = useTheme();
-  const { words, addWord, removeWord, retryTranslate, loading, lang } = useStore();
+  const { words, addWord, removeWord, retryTranslate, patchWord, loading, lang } = useStore();
   const [term, setTerm] = useState('');
   const [q, setQ] = useState('');
   const [searching, setSearching] = useState(false);
@@ -33,7 +33,7 @@ export default function WordsScreen({ onPlay }: { onPlay: () => void }) {
     const nq = norm(q);
     return nq ? mine.filter((w) => norm(w.term).includes(nq) || norm(w.meaning).includes(nq)) : mine;
   }, [mine, q]);
-  const due = mine.filter((w) => w.status === 'ok' && isDue(w)).length;
+  const due = mine.filter((w) => w.status === 'ok' && !w.archived && isDue(w)).length;
 
   const save = async (value: string) => {
     const v = value.trim();
@@ -70,7 +70,7 @@ export default function WordsScreen({ onPlay }: { onPlay: () => void }) {
                 <Pressable key={w} disabled={has} onPress={() => save(w)} accessibilityRole="button" accessibilityLabel={has ? `${w}, ya guardada` : `Guardar ${w}`}
                   style={({ pressed }) => ({ paddingVertical: 8, paddingHorizontal: 13, borderRadius: 999, borderWidth: 1,
                     borderColor: i === 0 && !has ? t.ink : t.line, backgroundColor: pressed ? t.line : t.card, opacity: has ? 0.45 : 1 })}>
-                  <Text style={{ color: t.ink, fontSize: 16, fontWeight: '700' }}>{w}{has ? ' ✓' : ''}</Text>
+                  <Text style={{ color: t.ink, fontSize: 16, fontWeight: '700' }}>{cap(w)}{has ? ' ✓' : ''}</Text>
                 </Pressable>
               );
             })}
@@ -130,7 +130,7 @@ export default function WordsScreen({ onPlay }: { onPlay: () => void }) {
         <WordRow w={item} open={openId === item.id} confirming={confirmId === item.id}
           onToggle={() => { setOpenId(openId === item.id ? null : item.id); setConfirmId(null); }}
           onDelete={() => { if (confirmId === item.id) { setConfirmId(null); setOpenId(null); removeWord(item.id); } else setConfirmId(item.id); }}
-          onRetry={() => retryTranslate(item)} />
+          onRetry={() => retryTranslate(item)} onArchive={() => patchWord(item.id, { archived: !item.archived })} />
       )}
     />
   );
@@ -218,8 +218,8 @@ function Starter({ lang, saved, onSave, onPlay, more }: { lang: Lang; saved: Set
           return (
             <View key={w.term} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 11, borderTopWidth: i ? 1 : 0, borderColor: t.line }}>
               <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={{ color: t.ink, fontWeight: '800', fontSize: 16 }}>{w.term}</Text>
-                <Text style={{ color: t.muted, fontSize: 14 }} numberOfLines={1}>{w.translation}</Text>
+                <Text style={{ color: t.ink, fontWeight: '800', fontSize: 16 }}>{cap(w.term)}</Text>
+                <Text style={{ color: t.muted, fontSize: 14 }} numberOfLines={1}>{cap(w.translation)}</Text>
               </View>
               <Speaker onPress={() => say(w.term, lang)} />
               <Pressable onPress={() => !has && add(w.term)} disabled={has} accessibilityRole="button" accessibilityLabel={has ? 'Añadida' : `Añadir ${w.term}`}
@@ -274,8 +274,8 @@ function ForYou({ lang, count, onSave, saved }: { lang: Lang; count: number; onS
       {items.filter((s) => !saved.has(norm(s.term))).slice(0, show).map((s) => (
         <View key={s.term} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: t.card, borderRadius: 14, borderWidth: 1, borderColor: t.line, padding: 12 }}>
           <View style={{ flex: 1, minWidth: 0 }}>
-            <Text style={{ color: t.ink, fontWeight: '800', fontSize: 16 }}>{s.term}</Text>
-            <Text style={{ color: t.ink, fontSize: 14 }}>{s.translation}</Text>
+            <Text style={{ color: t.ink, fontWeight: '800', fontSize: 16 }}>{cap(s.term)}</Text>
+            <Text style={{ color: t.ink, fontSize: 14 }}>{cap(s.translation)}</Text>
             {!!s.reason && <Text style={{ color: t.muted, fontSize: 12 }}>{s.reason}</Text>}
           </View>
           <Pressable onPress={() => { onSave(s.term); drop(s.term); }} accessibilityRole="button" accessibilityLabel={`Añadir ${s.term}`}
@@ -294,19 +294,20 @@ function ForYou({ lang, count, onSave, saved }: { lang: Lang; count: number; onS
   );
 }
 
-function WordRow({ w, open, confirming, onToggle, onDelete, onRetry }: {
-  w: Word; open: boolean; confirming: boolean; onToggle: () => void; onDelete: () => void; onRetry: () => void;
+function WordRow({ w, open, confirming, onToggle, onDelete, onRetry, onArchive }: {
+  w: Word; open: boolean; confirming: boolean; onToggle: () => void; onDelete: () => void; onRetry: () => void; onArchive: () => void;
 }) {
   const t = useTheme();
-  const meaning = w.status === 'pending' ? 'Traduciendo…' : w.status === 'error' ? 'Sin traducción' : w.meaning;
+  const meaning = w.status === 'pending' ? 'Traduciendo…' : w.status === 'error' ? 'Sin traducción' : cap(w.meaning);
   return (
     <Pressable onPress={onToggle} accessibilityRole="button" accessibilityState={{ expanded: open }} style={{ paddingVertical: 13, gap: 8 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={{ color: t.ink, fontSize: 18, fontWeight: '800' }}>{w.term}</Text>
+          <Text style={{ color: t.ink, fontSize: 18, fontWeight: '800' }}>{cap(w.term)}</Text>
           <Text style={{ color: w.status === 'ok' ? t.ink : t.muted, fontSize: 15, opacity: w.status === 'ok' ? 0.8 : 1 }} numberOfLines={open ? undefined : 1}>{meaning}</Text>
         </View>
-        {w.box === 5 ? <Badge text="DOMINADA" bg={t.accent} fg={t.accentInk} />
+        {w.archived ? <Badge text="FUERA DEL JUEGO" bg={t.line} fg={t.muted} />
+          : w.box === 5 ? <Badge text="DOMINADA" bg={t.accent} fg={t.accentInk} />
           : isHard(w) ? <Badge text="TE CUESTA" bg={t.badSoft} fg={t.bad} />
           : <View style={{ flexDirection: 'row', gap: 3 }}>{[1, 2, 3, 4, 5].map((i) => <View key={i} style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: i <= w.box ? t.accent : t.line }} />)}</View>}
       </View>
@@ -319,7 +320,7 @@ function WordRow({ w, open, confirming, onToggle, onDelete, onRetry }: {
               <Text style={{ color: t.muted, fontSize: 13 }}>Escuchar</Text>
             </View>
           )}
-          {w.alts.length > 0 && <Text style={{ color: t.muted }}>También: {w.alts.join(', ')}</Text>}
+          {w.alts.length > 0 && <Text style={{ color: t.muted }}>También: {capList(w.alts)}</Text>}
           {w.status === 'ok' && !!w.note && <Text style={{ color: t.bad }}>{w.note}</Text>}
           {(w.examples?.length ? w.examples : w.example ? [{ text: w.example, translation: '' }] : []).map((ex) => (
             <View key={ex.text} style={{ flexDirection: 'row', gap: 8, alignItems: 'center', borderLeftWidth: 3, borderColor: t.accent, paddingLeft: 8 }}>
@@ -330,9 +331,17 @@ function WordRow({ w, open, confirming, onToggle, onDelete, onRetry }: {
               <Speaker size={24} onPress={() => say(ex.text, w.deck)} label="Escuchar la frase" />
             </View>
           ))}
-          <Text onPress={onDelete} accessibilityRole="button" style={{ color: t.bad, fontWeight: confirming ? '800' : '600', alignSelf: 'flex-start', paddingVertical: 4 }}>
-            {confirming ? 'Toca otra vez para borrar' : 'Borrar palabra'}
-          </Text>
+          <View style={{ flexDirection: 'row', gap: 18, flexWrap: 'wrap' }}>
+            {w.status === 'ok' && (
+              <Text onPress={onArchive} accessibilityRole="button" style={{ color: t.blue, fontWeight: '700', paddingVertical: 4 }}>
+                {w.archived ? 'Volver a jugar con ella' : 'Sacar del juego'}
+              </Text>
+            )}
+            <Text onPress={onDelete} accessibilityRole="button" style={{ color: t.bad, fontWeight: confirming ? '800' : '600', paddingVertical: 4 }}>
+              {confirming ? 'Toca otra vez para borrar' : 'Borrar palabra'}
+            </Text>
+          </View>
+          {w.archived && <Text style={{ color: t.muted, fontSize: 13 }}>No te la preguntaremos en los juegos. Sigue en tu lista.</Text>}
         </View>
       )}
     </Pressable>

@@ -4,7 +4,7 @@ import * as Haptics from 'expo-haptics';
 import { useStore } from '../lib/store';
 import { useTheme } from '../lib/theme';
 import { supabase } from '../lib/supabase';
-import { shortMeaning, shuffle, norm } from '../lib/text';
+import { cap, shortMeaning, shuffle, norm } from '../lib/text';
 import { isDue, regrade } from '../lib/progress';
 import { say } from '../lib/speech';
 import { SPANISH_DECOYS, SPANISH_DEF_DECOYS } from '../lib/distractors';
@@ -55,7 +55,7 @@ function buildQuestion(word: Word, pool: Word[], deck: Deck, retry: boolean): Q 
 export default function ChoiceGame({ onExit, challengeId, hardOnly }: { onExit: () => void; challengeId?: string; hardOnly?: boolean }) {
   const t = useTheme();
   const { words, patchWord, recordProgress, stats, lang: deck } = useStore();
-  const pool = useMemo(() => words.filter((w) => w.deck === deck && w.status === 'ok' && w.meaning), [words, deck]);
+  const pool = useMemo(() => words.filter((w) => w.deck === deck && w.status === 'ok' && w.meaning && !w.archived), [words, deck]);
   const [roundKey, setRoundKey] = useState(0);
 
   const initialQueue = useMemo(() => {
@@ -85,6 +85,7 @@ export default function ChoiceGame({ onExit, challengeId, hardOnly }: { onExit: 
   const [skipped, setSkipped] = useState(0);
   const [missed, setMissed] = useState<Word[]>([]);
   const [result, setResult] = useState<RoundResult | null>(null);
+  const [archivedMsg, setArchivedMsg] = useState(false);
   const graded = useRef(new Set<string>());
 
   const timer = useRef(new Animated.Value(1)).current;
@@ -104,7 +105,7 @@ export default function ChoiceGame({ onExit, challengeId, hardOnly }: { onExit: 
     if (!item) { setQ(null); return; }
     const fresh = pool.find((w) => w.id === item.word.id) || item.word;
     setQ(buildQuestion(fresh, pool, deck, item.retry));
-    setPicked(null); setTimedOut(false);
+    setPicked(null); setTimedOut(false); setArchivedMsg(false);
     timer.setValue(1);
     Animated.timing(timer, { toValue: 0, duration: SECONDS * 1000, easing: Easing.linear, useNativeDriver: false }).start(({ finished }) => {
       if (finished) setTimedOut(true);
@@ -244,7 +245,7 @@ export default function ChoiceGame({ onExit, challengeId, hardOnly }: { onExit: 
           {q.retry ? 'OTRA OPORTUNIDAD · ' : ''}{q.reverse ? (deck === 'es' ? '¿QUÉ PALABRA ES?' : '¿CÓMO SE DICE?') : '¿QUÉ SIGNIFICA?'}
         </Text>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-          <Text style={{ color: t.ink, fontSize: q.prompt.length > 28 ? 22 : 34, fontWeight: '800', letterSpacing: -0.6, flexShrink: 1 }}>{q.prompt}</Text>
+          <Text style={{ color: t.ink, fontSize: q.prompt.length > 28 ? 22 : 34, fontWeight: '800', letterSpacing: -0.6, flexShrink: 1 }}>{cap(q.prompt)}</Text>
           {!q.reverse && <Speaker size={34} onPress={() => say(q.prompt, deck)} label={`Escuchar ${q.prompt}`} />}
         </View>
         <Animated.View style={{ position: 'absolute', left: 20, right: 20, bottom: 12, height: 6, borderRadius: 6, overflow: 'hidden', backgroundColor: t.line }}>
@@ -272,7 +273,7 @@ export default function ChoiceGame({ onExit, challengeId, hardOnly }: { onExit: 
                 borderRadius: 16, paddingVertical: 15, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 12,
                 opacity: answeredState && !isAns && !isPicked ? 0.5 : 1 })}>
               <Text style={{ color: t.muted, fontWeight: '800', width: 18 }}>{'ABCD'[k]}</Text>
-              <Text style={{ color: t.ink, fontSize: 17, fontWeight: '600', flex: 1 }}>{o.text}</Text>
+              <Text style={{ color: t.ink, fontSize: 17, fontWeight: '600', flex: 1 }}>{cap(o.text)}</Text>
               {answeredState && isAns && <Text style={{ color: t.good, fontWeight: '800' }}>✓</Text>}
               {isPicked && !isAns && <Text style={{ color: t.bad, fontWeight: '800' }}>✕</Text>}
             </Pressable>
@@ -296,7 +297,7 @@ export default function ChoiceGame({ onExit, challengeId, hardOnly }: { onExit: 
             {q.word.fails >= 1 && picked !== '__skip__' && <Text style={{ color: t.bad, fontSize: 12, fontWeight: '700' }}>{q.word.fails + 1}.º fallo con esta palabra</Text>}
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <Text style={{ color: t.ink, fontSize: 17, flexShrink: 1 }}><Text style={{ fontWeight: '800' }}>{q.word.term}</Text> = {q.word.meaning}</Text>
+            <Text style={{ color: t.ink, fontSize: 17, flexShrink: 1 }}><Text style={{ fontWeight: '800' }}>{cap(q.word.term)}</Text> = {cap(q.word.meaning)}</Text>
             <Speaker onPress={() => say(targetText, deck)} />
           </View>
           {(q.word.examples?.length ? q.word.examples : q.word.example ? [{ text: q.word.example, translation: '' }] : []).map((ex) => (
@@ -309,10 +310,14 @@ export default function ChoiceGame({ onExit, challengeId, hardOnly }: { onExit: 
             </View>
           ))}
           {pickedOpt && !!pickedOpt.means && (
-            <Text style={{ color: t.muted, fontSize: 13 }}><Text style={{ fontWeight: '800', color: t.ink }}>{pickedOpt.text}</Text> (la que elegiste) = {pickedOpt.means}</Text>
+            <Text style={{ color: t.muted, fontSize: 13 }}><Text style={{ fontWeight: '800', color: t.ink }}>{cap(pickedOpt.text)}</Text> (la que elegiste) = {cap(pickedOpt.means)}</Text>
           )}
           {!!q.word.note && <Text style={{ color: t.bad, fontSize: 13 }}>{q.word.note}</Text>}
           <Btn title={lives <= 0 ? 'Ver resultado' : 'Continuar'} onPress={next} style={{ marginTop: 4 }} />
+          <Text onPress={() => { patchWord(q.word.id, { archived: true }); setQueue((qq) => qq.filter((x, k) => k <= i || x.word.id !== q.word.id)); setArchivedMsg(true); }}
+            accessibilityRole="button" style={{ color: t.muted, textAlign: 'center', fontWeight: '700', paddingTop: 4 }}>
+            {archivedMsg ? 'Hecho: no volverá a salir en los juegos' : 'No preguntarme más esta palabra'}
+          </Text>
         </View>
       )}
     </ScrollView>

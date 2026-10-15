@@ -19,6 +19,7 @@ export type Word = {
   due_at: string;
   seen: number;
   fails: number;
+  archived: boolean;
   created_at: string;
 };
 

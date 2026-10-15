@@ -4,6 +4,7 @@ import { useStore } from '../lib/store';
 import { useTheme } from '../lib/theme';
 import { isDue, levelInfo, liveStreak, todayXp } from '../lib/progress';
 import { isHard } from '../lib/types';
+import { cap } from '../lib/text';
 import { Bar, Btn } from '../components/ui';
 
 export type Game = 'choice' | 'cards' | 'write';
@@ -11,7 +12,7 @@ export type Game = 'choice' | 'cards' | 'write';
 export default function PlayScreen({ onPlay, onAddWords }: { onPlay: (g: Game, o?: { hardOnly?: boolean }) => void; onAddWords: () => void }) {
   const t = useTheme();
   const { words, stats, lang } = useStore();
-  const ready = words.filter((w) => w.deck === lang && w.status === 'ok');
+  const ready = words.filter((w) => w.deck === lang && w.status === 'ok' && !w.archived);
   const due = ready.filter(isDue).length;
   const hard = ready.filter(isHard);
   const lv = levelInfo(stats.xp);
@@ -69,7 +70,7 @@ export default function PlayScreen({ onPlay, onAddWords }: { onPlay: (g: Game, o
           style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: t.badSoft, borderRadius: 16, padding: 14, opacity: pressed ? 0.85 : 1 })}>
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text style={{ color: t.bad, fontWeight: '800', fontSize: 16 }}>Te {hard.length === 1 ? 'cuesta 1 palabra' : `cuestan ${hard.length} palabras`}</Text>
-            <Text style={{ color: t.muted }} numberOfLines={1}>{hard.slice(0, 4).map((w) => w.term).join(', ')}</Text>
+            <Text style={{ color: t.muted }} numberOfLines={1}>{hard.slice(0, 4).map((w) => cap(w.term)).join(', ')}</Text>
           </View>
           <Text style={{ color: '#fff', backgroundColor: t.bad, fontWeight: '800', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 10, overflow: 'hidden' }}>Repasar</Text>
         </Pressable>

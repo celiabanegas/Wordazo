@@ -3,7 +3,7 @@ import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { useStore } from '../lib/store';
 import { useTheme } from '../lib/theme';
-import { acceptedAnswers, norm, shuffle, stripEs } from '../lib/text';
+import { acceptedAnswers, cap, capList, norm, shuffle, stripEs } from '../lib/text';
 import { isDue, regrade } from '../lib/progress';
 import type { Deck, Word } from '../lib/types';
 import { Bar, Btn, Card, Speaker } from '../components/ui';
@@ -16,7 +16,7 @@ function useRound(deck: Deck) {
   const { words } = useStore();
   const [key, setKey] = useState(0);
   const queue = useMemo(() => {
-    const pool = words.filter((w) => w.deck === deck && w.status === 'ok' && w.meaning);
+    const pool = words.filter((w) => w.deck === deck && w.status === 'ok' && w.meaning && !w.archived);
     const due = shuffle(pool.filter(isDue));
     const rest = shuffle(pool.filter((w) => !isDue(w))).sort((a, b) => a.box - b.box);
     return due.concat(rest).slice(0, 10);
@@ -83,13 +83,13 @@ export function CardsGame({ onExit }: { onExit: () => void }) {
       <Pressable onPress={() => setOpen(true)} accessibilityRole="button" accessibilityLabel="Girar tarjeta"
         style={{ backgroundColor: t.card, borderRadius: 22, borderWidth: 1, borderColor: t.line, padding: 22, minHeight: 300, justifyContent: 'center', gap: 16 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-          <Text style={{ color: t.ink, fontSize: 38, fontWeight: '800', letterSpacing: -0.8, flexShrink: 1 }}>{w.term}</Text>
+          <Text style={{ color: t.ink, fontSize: 38, fontWeight: '800', letterSpacing: -0.8, flexShrink: 1 }}>{cap(w.term)}</Text>
           <Speaker size={34} onPress={() => say(w.term, deck)} />
         </View>
         {open ? (
           <View style={{ borderTopWidth: 2, borderStyle: 'dashed', borderColor: t.line, paddingTop: 14, gap: 6 }}>
-            <Text style={{ color: t.ink, fontSize: 22, fontWeight: '700' }}>{w.meaning}</Text>
-            {w.alts.length > 0 && <Text style={{ color: t.muted }}>También: {w.alts.join(', ')}</Text>}
+            <Text style={{ color: t.ink, fontSize: 22, fontWeight: '700' }}>{cap(w.meaning)}</Text>
+            {w.alts.length > 0 && <Text style={{ color: t.muted }}>También: {capList(w.alts)}</Text>}
             {!!w.example && <Text style={{ color: t.muted, fontStyle: 'italic' }}>{w.example}</Text>}
           </View>
         ) : <Text style={{ color: t.muted }}>Piensa la traducción y toca para comprobarla</Text>}
@@ -121,7 +121,7 @@ export function WriteGame({ onExit }: { onExit: () => void }) {
   if (!queue.length) return <Empty onExit={onExit} />;
   const w = queue[i];
   const en = deck !== 'es';
-  const solution = en ? [w.meaning, ...w.alts].join(', ') : w.term;
+  const solution = en ? capList([w.meaning, ...w.alts]) : cap(w.term);
 
   const check = (giveUp = false) => {
     if (state || (!giveUp && !value.trim())) return;
@@ -148,7 +148,7 @@ export function WriteGame({ onExit }: { onExit: () => void }) {
       <Header i={i} total={queue.length} onExit={onExit} label={en ? 'ESCRIBE LA TRADUCCIÓN EN ESPAÑOL' : 'ESCRIBE LA PALABRA'} />
       <Card style={{ minHeight: 160, justifyContent: 'center', gap: 8, borderRadius: 22 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-          <Text style={{ color: t.ink, fontSize: en ? 36 : 21, fontWeight: en ? '800' : '700', flexShrink: 1 }}>{en ? w.term : w.meaning}</Text>
+          <Text style={{ color: t.ink, fontSize: en ? 36 : 21, fontWeight: en ? '800' : '700', flexShrink: 1 }}>{cap(en ? w.term : w.meaning)}</Text>
           {en && <Speaker size={34} onPress={() => say(w.term, deck)} />}
         </View>
         {state && !!w.example && <Text style={{ color: t.muted, fontStyle: 'italic' }}>{w.example}</Text>}

@@ -40,3 +40,10 @@ export function shuffle<T>(a: T[]): T[] {
 
 export const todayStr = (d = new Date()) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+/** Formato único para mostrar palabras: primera letra en mayúscula y el resto en minúscula */
+export const cap = (s: string) => {
+  const t = String(s || '').trim();
+  return t ? t.charAt(0).toLocaleUpperCase('es') + t.slice(1).toLocaleLowerCase('es') : t;
+};
+export const capList = (a: string[]) => a.map(cap).join(', ');

@@ -5,7 +5,7 @@ import { useTheme } from '../lib/theme';
 import { supabase } from '../lib/supabase';
 import { LANGS } from '../lib/langs';
 import { liveStreak } from '../lib/progress';
-import { todayStr } from '../lib/text';
+import { cap, todayStr } from '../lib/text';
 import { enablePush, disablePush, pushSupported } from '../lib/push';
 import type { Challenge } from '../lib/types';
 import { Btn, Label } from '../components/ui';
@@ -112,7 +112,7 @@ export default function MeScreen() {
               Has guardado <Text style={{ fontWeight: '800' }}>{mine.length} {mine.length === 1 ? 'palabra' : 'palabras'}</Text>
               {mastered > 0 ? <> y ya dominas <Text style={{ fontWeight: '800' }}>{mastered}</Text></> : null}.
               {hardest && hardest.fails >= 2 ? (
-                <> La que más se te resiste es <Text style={{ fontWeight: '800', color: t.bad, backgroundColor: t.badSoft }}> {hardest.term} </Text>: la has fallado {hardest.fails} veces.</>
+                <> La que más se te resiste es <Text style={{ fontWeight: '800', color: t.bad, backgroundColor: t.badSoft }}> {cap(hardest.term)} </Text>: la has fallado {hardest.fails} veces.</>
               ) : null}
             </>
           )}

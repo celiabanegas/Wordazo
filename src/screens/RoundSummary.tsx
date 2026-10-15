@@ -5,6 +5,7 @@ import { useStore } from '../lib/store';
 import { useTheme } from '../lib/theme';
 import { levelInfo, levelName, liveStreak, todayXp } from '../lib/progress';
 import type { Word } from '../lib/types';
+import { cap } from '../lib/text';
 import { Bar, Btn, Card, Label } from '../components/ui';
 
 export type RoundResult = {
@@ -75,7 +76,7 @@ export default function RoundSummary({ result, onAgain, onExit, title = 'Reto El
         <Card style={{ gap: 8 }}>
           <Text style={{ color: t.ink, fontWeight: '800' }}>Para repasar</Text>
           {result.missed.map((w) => (
-            <Text key={w.id} style={{ color: t.ink }}><Text style={{ fontWeight: '800' }}>{w.term}</Text>  {w.meaning}</Text>
+            <Text key={w.id} style={{ color: t.ink }}><Text style={{ fontWeight: '800' }}>{cap(w.term)}</Text>  {cap(w.meaning)}</Text>
           ))}
         </Card>
       )}
