@@ -1,0 +1,33 @@
+{
+  "expo": {
+    "name": "Wordazo",
+    "slug": "wordazo",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.alfatec.wordazo"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#FFCF33",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "package": "com.alfatec.wordazo"
+    },
+    "web": {
+      "favicon": "./public/favicon.png",
+      "output": "single",
+      "name": "Wordazo",
+      "shortName": "Wordazo",
+      "lang": "es",
+      "themeColor": "#FFCF33",
+      "backgroundColor": "#E9EDF2"
+    }
+  }
+}

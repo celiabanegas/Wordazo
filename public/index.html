@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Wordazo</title>
+    <meta name="description" content="Guarda las palabras en inglés que no conoces y apréndelas jugando." />
+
+    <!-- App instalable: se añade a la pantalla de inicio o al escritorio -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#E9EDF2" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#10141C" media="(prefers-color-scheme: dark)" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <!-- iPhone / iPad -->
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Wordazo" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+
+    <style id="expo-reset">
+      html, body { height: 100%; }
+      body { overflow: hidden; margin: 0; background: #E9EDF2; overscroll-behavior: none; -webkit-tap-highlight-color: transparent; }
+      @media (prefers-color-scheme: dark) { body { background: #10141C; } }
+      #root { display: flex; height: 100%; flex: 1; }
+      /* En pantallas grandes, la app se muestra con ancho de móvil centrada */
+      @media (min-width: 640px) {
+        #root { max-width: 520px; margin: 0 auto; box-shadow: 0 0 0 1px rgba(0,0,0,.06), 0 10px 40px rgba(0,0,0,.08); }
+      }
+    </style>
+  </head>
+
+  <body>
+    <noscript>Necesitas activar JavaScript para usar Wordazo.</noscript>
+    <div id="root"></div>
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function () {
+          navigator.serviceWorker.register('/sw.js').catch(function () {});
+        });
+      }
+    </script>
+  </body>
+</html>
