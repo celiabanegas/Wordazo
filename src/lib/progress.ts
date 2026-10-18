@@ -64,7 +64,8 @@ export const todayXp = (s: Stats) => (s.last_day === todayStr() ? s.today_xp : 0
 export const playable = (words: Word[], deck: string) =>
   words.filter((w) => w.deck === deck && w.status === 'ok' && w.meaning && !w.archived);
 
-export const ROUND_SIZE = 15;
+// Elige pregunta todas las palabras del banco en cada ronda (cada una una vez, más una segunda oportunidad si la fallas)
+export const ROUND_SIZE = Number.POSITIVE_INFINITY;
 // Última ronda de Elige: Tarjetas y Escribe repasan esas mismas palabras
 let lastRound: { deck: string; ids: string[] } | null = null;
 export const rememberRound = (deck: string, ids: string[]) => { lastRound = { deck, ids }; };

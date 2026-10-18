@@ -9,9 +9,8 @@ Hecha con React Native (Expo) y Supabase.
 - **Menores de 14 años:** la cuenta no se activa hasta que la madre, el padre o el tutor da su permiso desde un email.
 - **Idiomas:** inglés, francés, alemán, italiano, portugués y español culto. Cada idioma con sus palabras y su progreso. Nivel ajustable.
 - **Palabras:** sugerencias mientras escribes (corrige erratas), traducción automática con 3 ejemplos traducidos, avisos de falsos amigos, pronunciación con la voz del dispositivo.
-- **Primeras palabras:** si no tienes ninguna, 6 por tema (series, viajes, redes…), con «Añadir las que faltan y jugar».
-- **Para ti:** 9 palabras nuevas a la semana, relacionadas con las tuyas.
-- **Juegos:** Elige (15 preguntas, 3 vidas, reloj, combos ×4, opciones pensadas para confundir, botón «No la sé · Pasar»), repaso de lo que te cuesta, Tarjetas y Escribe.
+- **Palabras:** dos pestañas, «Añadir» y «Mis palabras». En «Añadir» hay un único bloque de sugerencias: «Para ti» (9 a la semana, según tus palabras, a partir de 3 guardadas) o por tema (series, viajes, redes…), de 6 en 6.
+- **Juegos:** Elige (todas las palabras de tu banco en cada ronda, 3 vidas, reloj, combos ×4, opciones pensadas para confundir, botón «No la sé · Pasar»), repaso de lo que te cuesta, Tarjetas y Escribe.
 - **Amigos:** liga semanal y retos de 24 h por enlace (WhatsApp, Instagram…). Sin chat. Solo se ve el nombre de pila y la inicial.
 - **Yo:** calendario del mes, progreso en una frase, pegatinas y ajustes (objetivo diario, aviso diario, privacidad, cerrar sesión, borrar cuenta).
 - **Aviso diario:** como mucho uno al día, a la hora elegida, solo si aún no has jugado.

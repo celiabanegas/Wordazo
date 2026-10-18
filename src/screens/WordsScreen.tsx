@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useStore } from '../lib/store';
@@ -15,14 +15,12 @@ import { DAILY_WORD_LIMIT } from '../lib/config';
 import { Btn, Chip, Speaker } from '../components/ui';
 
 type Sugg = { term: string; translation: string; reason?: string };
-const mondayUTC = () => { const d = new Date(); d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7)); return d.toISOString().slice(0, 10); };
 
 export default function WordsScreen({ onPlay }: { onPlay: () => void }) {
   const t = useTheme();
   const { words, addWord, removeWord, retryTranslate, patchWord, loading, lang } = useStore();
   const [term, setTerm] = useState('');
   const [q, setQ] = useState('');
-  const [searching, setSearching] = useState(false);
   const [flash, setFlash] = useState<{ text: string; bad?: boolean } | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
@@ -50,83 +48,87 @@ export default function WordsScreen({ onPlay }: { onPlay: () => void }) {
   };
 
   const typing = term.trim().length > 0;
+  const [view, setView] = useState<'add' | 'list'>('add');
+
+  // Pestañas: «Añadir» (escribir o elegir sugerencias) y «Mis palabras» (la lista)
+  const tabs = (
+    <View accessibilityRole="tablist" style={{ flexDirection: 'row', backgroundColor: t.card, borderRadius: 14, borderWidth: 1, borderColor: t.line, padding: 4 }}>
+      {([['add', 'Añadir'], ['list', `Mis palabras${mine.length ? ` · ${mine.length}` : ''}`]] as const).map(([k, l]) => (
+        <Pressable key={k} onPress={() => setView(k)} accessibilityRole="tab" accessibilityState={{ selected: view === k }}
+          style={{ flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center', backgroundColor: view === k ? t.ink : 'transparent' }}>
+          <Text style={{ color: view === k ? t.bg : t.muted, fontWeight: '800', fontSize: 15 }}>{l}</Text>
+        </Pressable>
+      ))}
+    </View>
+  );
+
+  if (view === 'add') {
+    return (
+      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 16, paddingTop: 6, paddingBottom: 40, gap: 16, maxWidth: 640, width: '100%', alignSelf: 'center' }}>
+        {tabs}
+        <View style={{ gap: 10 }}>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <TextInput
+              value={term} onChangeText={setTerm} placeholder={LANGS[lang].placeholder} placeholderTextColor={t.muted}
+              autoCapitalize="none" autoCorrect={false} spellCheck={false} returnKeyType="done" onSubmitEditing={() => save(term)}
+              style={{ flex: 1, minWidth: 0, backgroundColor: t.card, borderWidth: 2, borderColor: typing ? t.ink : t.line, borderRadius: 16,
+                paddingHorizontal: 16, paddingVertical: 15, fontSize: 18, color: t.ink }} />
+            {typing && <Btn title="+" kind="accent" onPress={() => save(term)} style={{ width: 56, borderRadius: 16 }} />}
+          </View>
+          {typing && sugg.list.length > 0 && (
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+              {sugg.fuzzy && <Text style={{ color: t.muted, width: '100%', fontSize: 13 }}>¿Querías decir…?</Text>}
+              {sugg.list.map((w, i) => {
+                const has = saved.has(norm(w));
+                return (
+                  <Pressable key={w} disabled={has} onPress={() => save(w)} accessibilityRole="button" accessibilityLabel={has ? `${w}, ya guardada` : `Guardar ${w}`}
+                    style={({ pressed }) => ({ paddingVertical: 8, paddingHorizontal: 13, borderRadius: 999, borderWidth: 1,
+                      borderColor: i === 0 && !has ? t.ink : t.line, backgroundColor: pressed ? t.line : t.card, opacity: has ? 0.45 : 1 })}>
+                    <Text style={{ color: t.ink, fontSize: 16, fontWeight: '700' }}>{cap(w)}{has ? ' ✓' : ''}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          )}
+          {!typing && flash && <Text style={{ color: flash.bad ? t.bad : t.good, fontWeight: '700' }}>{flash.text}</Text>}
+        </View>
+        {!typing && !loading && <Suggestions lang={lang} saved={saved} count={mine.length} onSave={save} onPlay={onPlay} />}
+      </ScrollView>
+    );
+  }
 
   const header = (
     <View style={{ gap: 14, paddingBottom: 6 }}>
-      <View style={{ gap: 10 }}>
-        <View style={{ flexDirection: 'row', gap: 8 }}>
-          <TextInput
-            value={term} onChangeText={setTerm} placeholder={LANGS[lang].placeholder} placeholderTextColor={t.muted}
-            autoCapitalize="none" autoCorrect={false} spellCheck={false} returnKeyType="done" onSubmitEditing={() => save(term)}
-            style={{ flex: 1, minWidth: 0, backgroundColor: t.card, borderWidth: 2, borderColor: typing ? t.ink : t.line, borderRadius: 16,
-              paddingHorizontal: 16, paddingVertical: 15, fontSize: 18, color: t.ink }} />
-          {typing && <Btn title="+" kind="accent" onPress={() => save(term)} style={{ width: 56, borderRadius: 16 }} />}
-        </View>
-        {typing && sugg.list.length > 0 && (
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-            {sugg.fuzzy && <Text style={{ color: t.muted, width: '100%', fontSize: 13 }}>¿Querías decir…?</Text>}
-            {sugg.list.map((w, i) => {
-              const has = saved.has(norm(w));
-              return (
-                <Pressable key={w} disabled={has} onPress={() => save(w)} accessibilityRole="button" accessibilityLabel={has ? `${w}, ya guardada` : `Guardar ${w}`}
-                  style={({ pressed }) => ({ paddingVertical: 8, paddingHorizontal: 13, borderRadius: 999, borderWidth: 1,
-                    borderColor: i === 0 && !has ? t.ink : t.line, backgroundColor: pressed ? t.line : t.card, opacity: has ? 0.45 : 1 })}>
-                  <Text style={{ color: t.ink, fontSize: 16, fontWeight: '700' }}>{cap(w)}{has ? ' ✓' : ''}</Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        )}
-        {!typing && flash && <Text style={{ color: flash.bad ? t.bad : t.good, fontWeight: '700' }}>{flash.text}</Text>}
-      </View>
-
-      {!typing && mine.length > 0 && (
-        <>
-          {due > 0 && (
-            <Pressable onPress={onPlay} accessibilityRole="button"
-              style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: t.accent, borderRadius: 14, padding: 14, opacity: pressed ? 0.85 : 1 })}>
-              <Text style={{ color: t.accentInk, fontWeight: '800', fontSize: 16, flex: 1 }}>{due} {due === 1 ? 'palabra' : 'palabras'} por repasar</Text>
-              <Text style={{ color: t.accentInk, fontWeight: '800' }}>Jugar →</Text>
-            </Pressable>
-          )}
-          <ForYou lang={lang} count={mine.length} onSave={save} saved={saved} />
-        </>
+      {tabs}
+      {due > 0 && (
+        <Pressable onPress={onPlay} accessibilityRole="button"
+          style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: t.accent, borderRadius: 14, padding: 14, opacity: pressed ? 0.85 : 1 })}>
+          <Text style={{ color: t.accentInk, fontWeight: '800', fontSize: 16, flex: 1 }}>{due} {due === 1 ? 'palabra' : 'palabras'} por repasar</Text>
+          <Text style={{ color: t.accentInk, fontWeight: '800' }}>Jugar →</Text>
+        </Pressable>
       )}
-
-      {/* Un único panel de temas: no se reinicia al añadir la primera palabra */}
-      {!typing && !loading && <Starter lang={lang} saved={saved} onSave={save} onPlay={onPlay} more={mine.length > 0} />}
-
-      {!typing && mine.length > 0 && (
-        <>
-          <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: 36 }}>
-            {searching ? (
-              <TextInput value={q} onChangeText={setQ} autoFocus placeholder="Buscar…" placeholderTextColor={t.muted} autoCapitalize="none"
-                style={{ flex: 1, fontSize: 16, color: t.ink, paddingVertical: 6, borderBottomWidth: 1, borderColor: t.line }} />
-            ) : (
-              <Text style={{ flex: 1, color: t.ink, fontWeight: '800', fontSize: 16 }}>Tus palabras <Text style={{ color: t.muted, fontWeight: '600' }}>{mine.length}</Text></Text>
-            )}
-            {mine.length > 8 && (
-              <Text onPress={() => { setSearching(!searching); setQ(''); }} accessibilityRole="button" style={{ color: t.blue, fontWeight: '700', paddingLeft: 12, paddingVertical: 6 }}>
-                {searching ? 'Cerrar' : 'Buscar'}
-              </Text>
-            )}
-          </View>
-        </>
+      {mine.length > 8 && (
+        <TextInput value={q} onChangeText={setQ} placeholder="Buscar en tus palabras…" placeholderTextColor={t.muted} autoCapitalize="none"
+          style={{ backgroundColor: t.card, borderWidth: 1, borderColor: t.line, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, fontSize: 16, color: t.ink }} />
       )}
     </View>
   );
 
   return (
     <FlatList
-      data={typing ? [] : shown}
+      data={shown}
       keyExtractor={(w) => w.id}
       ListHeaderComponent={header}
       contentContainerStyle={{ padding: 16, paddingTop: 6, paddingBottom: 40, maxWidth: 640, width: '100%', alignSelf: 'center' }}
       ItemSeparatorComponent={() => <View style={{ height: 1, backgroundColor: t.line }} />}
       keyboardShouldPersistTaps="handled"
-      ListEmptyComponent={loading ? <ActivityIndicator color={t.muted} style={{ marginTop: 30 }} /> : mine.length && !typing ? (
+      ListEmptyComponent={loading ? <ActivityIndicator color={t.muted} style={{ marginTop: 30 }} /> : mine.length ? (
         <Text style={{ color: t.muted, paddingVertical: 10 }}>Ninguna palabra coincide.</Text>
-      ) : null}
+      ) : (
+        <Text style={{ color: t.muted, paddingVertical: 10 }}>
+          Aún no tienes palabras. <Text onPress={() => setView('add')} style={{ color: t.blue, fontWeight: '800' }}>Añade la primera</Text>
+        </Text>
+      )}
       renderItem={({ item }) => (
         <WordRow w={item} open={openId === item.id} confirming={confirmId === item.id}
           onToggle={() => { setOpenId(openId === item.id ? null : item.id); setConfirmId(null); }}
@@ -137,11 +139,14 @@ export default function WordsScreen({ onPlay }: { onPlay: () => void }) {
   );
 }
 
-/** Palabras por tema: 6 cada vez, sin repetir las que ya tienes guardadas */
-function Starter({ lang, saved, onSave, onPlay, more }: { lang: Lang; saved: Set<string>; onSave: (t: string) => Promise<string>; onPlay: () => void; more?: boolean }) {
+/** Única recomendación: «Para ti» (según tus palabras) o por tema. 6 cada vez, sin repetir las que ya tienes. */
+const FOR_YOU = 'parati';
+function Suggestions({ lang, saved, count, onSave, onPlay }: { lang: Lang; saved: Set<string>; count: number; onSave: (t: string) => Promise<string>; onPlay: () => void }) {
   const t = useTheme();
   const { profile } = useStore();
-  const [topic, setTopic] = useState<string>(TOPICS[0].v);
+  const more = count > 0;
+  const personal = count >= 3; // con pocas palabras aún no hay base para recomendar
+  const [topic, setTopic] = useState<string>(personal ? FOR_YOU : TOPICS[0].v);
   const [pool, setPool] = useState<Sugg[]>([]);       // todas las palabras recibidas de este tema
   const [nextPage, setNextPage] = useState(1);
   const [done, setDone] = useState(false);             // el servidor ya no da más páginas
@@ -178,17 +183,21 @@ function Starter({ lang, saved, onSave, onPlay, more }: { lang: Lang; saved: Set
     inflight.current = true;
     setFetching(true);
     const g = gen.current;
-    supabase.functions.invoke('starter', { body: { lang, level: profile.level, topic, page: nextPage } }).then(({ data, error }) => {
+    // «Para ti»: 9 palabras por semana calculadas en el servidor (una sola página). Temas: páginas de 24.
+    const call = topic === FOR_YOU
+      ? supabase.functions.invoke('suggest', { body: { lang } }).then(({ data, error }) => ({ error, list: data?.items }))
+      : supabase.functions.invoke('starter', { body: { lang, level: profile.level, topic, page: nextPage } }).then(({ data, error }) => ({ error, list: data?.words }));
+    call.then(({ error, list }) => {
       inflight.current = false;
       setFetching(false);
       if (g !== gen.current) return;
-      if (error || !Array.isArray(data?.words)) { if (nextPage === 1) setFailed(true); else setDone(true); return; }
-      if (!data.words.length) { setDone(true); return; }
+      if (error || !Array.isArray(list)) { if (nextPage === 1) setFailed(true); else setDone(true); return; }
+      if (!list.length) { setDone(true); return; }
       setPool((p) => {
         const have = new Set(p.map((w) => norm(w.term)));
-        return [...p, ...shuffle(data.words as Sugg[]).filter((w) => !have.has(norm(w.term)))];
+        return [...p, ...(topic === FOR_YOU ? list as Sugg[] : shuffle(list as Sugg[])).filter((w) => !have.has(norm(w.term)))];
       });
-      setNextPage((n) => n + 1);
+      if (topic === FOR_YOU) setDone(true); else setNextPage((n) => n + 1);
     });
   }, [ready, visible.length, exhausted, fetching, failed, nextPage, lang, topic, profile.level]);
 
@@ -220,17 +229,18 @@ function Starter({ lang, saved, onSave, onPlay, more }: { lang: Lang; saved: Set
   return (
     <View style={{ gap: 12 }}>
       <View style={{ gap: 2 }}>
-        <Text style={{ color: t.ink, fontWeight: '800', fontSize: more ? 16 : 18 }}>{more ? 'Descubre palabras por tema' : '¿No se te ocurre ninguna?'}</Text>
-        <Text style={{ color: t.muted }}>{more ? 'Elige un tema y añade las que quieras:' : 'Empieza con estas. Elige un tema:'}</Text>
+        <Text style={{ color: t.ink, fontWeight: '800', fontSize: 18 }}>{more ? 'Sugerencias' : '¿No se te ocurre ninguna?'}</Text>
+        <Text style={{ color: t.muted }}>{more ? 'Añade las que quieras:' : 'Empieza con estas. Elige un tema:'}</Text>
       </View>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+        {personal && <Chip label="Para ti" on={topic === FOR_YOU} onPress={() => setTopic(FOR_YOU)} />}
         {TOPICS.map((x) => <Chip key={x.v} label={x.l} on={topic === x.v} onPress={() => setTopic(x.v)} />)}
       </View>
       <View style={{ backgroundColor: t.card, borderRadius: 16, borderWidth: 1, borderColor: t.line, paddingHorizontal: 14 }}>
         {loadingFirst && <ActivityIndicator color={t.muted} style={{ paddingVertical: 30 }} />}
         {failed && <Text style={{ color: t.muted, paddingVertical: 20 }}>No se pudieron cargar las sugerencias. Escribe tú una palabra arriba.</Text>}
         {!visible.length && !failed && exhausted && !leftover.length && (
-          <Text style={{ color: t.muted, paddingVertical: 20 }}>Ya tienes todas las palabras de este tema. Prueba con otro.</Text>
+          <Text style={{ color: t.muted, paddingVertical: 20 }}>{topic === FOR_YOU ? 'Ya has visto las sugerencias de esta semana. Prueba con un tema.' : 'Ya tienes todas las palabras de este tema. Prueba con otro.'}</Text>
         )}
         {visible.map((w, i) => {
           const has = saved.has(norm(w.term));
@@ -257,57 +267,6 @@ function Starter({ lang, saved, onSave, onPlay, more }: { lang: Lang; saved: Set
             <Text onPress={otherSix} accessibilityRole="button" style={{ color: t.blue, fontWeight: '700', textAlign: 'center' }}>Otras 6 ›</Text>
           ) : null}
         </>
-      )}
-    </View>
-  );
-}
-
-/** Sugerencias «Para ti»: se calculan una vez por semana en el servidor */
-function ForYou({ lang, count, onSave, saved }: { lang: Lang; count: number; onSave: (t: string) => Promise<string>; saved: Set<string> }) {
-  const t = useTheme();
-  const { session } = useStore();
-  const [items, setItems] = useState<Sugg[]>([]);
-  const [show, setShow] = useState(3);
-
-  useEffect(() => {
-    let alive = true;
-    setItems([]); setShow(3);
-    if (count < 3) return;
-    supabase.functions.invoke('suggest', { body: { lang } }).then(({ data }) => { if (alive && Array.isArray(data?.items)) setItems(data.items); });
-    return () => { alive = false; };
-  }, [lang, count >= 3]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const drop = (term: string) => {
-    const next = items.filter((i) => i.term !== term);
-    setItems(next);
-    supabase.from('user_suggestions').update({ items: next }).eq('user_id', session.user.id).eq('lang', lang).eq('week', mondayUTC()).then(() => null);
-  };
-
-  if (!items.some((s) => !saved.has(norm(s.term)))) return null;
-  return (
-    <View style={{ gap: 8 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' }}>
-        <Text style={{ color: t.ink, fontWeight: '800', fontSize: 16 }}>Para ti</Text>
-        <Text style={{ color: t.muted, fontSize: 13 }}>Según tus palabras y tu nivel</Text>
-      </View>
-      {items.filter((s) => !saved.has(norm(s.term))).slice(0, show).map((s) => (
-        <View key={s.term} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: t.card, borderRadius: 14, borderWidth: 1, borderColor: t.line, padding: 12 }}>
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <Text style={{ color: t.ink, fontWeight: '800', fontSize: 16 }}>{cap(s.term)}</Text>
-            <Text style={{ color: t.ink, fontSize: 14 }}>{cap(s.translation)}</Text>
-            {!!s.reason && <Text style={{ color: t.muted, fontSize: 12 }}>{s.reason}</Text>}
-          </View>
-          <Pressable onPress={() => { onSave(s.term); drop(s.term); }} accessibilityRole="button" accessibilityLabel={`Añadir ${s.term}`}
-            style={{ backgroundColor: t.accent, borderRadius: 10, paddingVertical: 8, paddingHorizontal: 11 }}>
-            <Text style={{ color: t.accentInk, fontWeight: '800' }}>+ Añadir</Text>
-          </Pressable>
-          <Pressable onPress={() => drop(s.term)} accessibilityRole="button" accessibilityLabel={`Descartar ${s.term}`} hitSlop={8}>
-            <Text style={{ color: t.muted, fontSize: 16, fontWeight: '700' }}>✕</Text>
-          </Pressable>
-        </View>
-      ))}
-      {items.filter((s) => !saved.has(norm(s.term))).length > show && (
-        <Text onPress={() => setShow(show + 3)} accessibilityRole="button" style={{ color: t.blue, fontWeight: '700', textAlign: 'center', paddingVertical: 4 }}>Ver más sugerencias</Text>
       )}
     </View>
   );
