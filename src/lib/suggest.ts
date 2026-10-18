@@ -1,11 +1,14 @@
 import type { Lang } from './langs';
-import en from './wordlists/en';
+import enBase from './wordlists/en';
+import enForms from './wordlists/en-forms';
 import fr from './wordlists/fr';
 import de from './wordlists/de';
 import it from './wordlists/it';
 import pt from './wordlists/pt';
 import es from './wordlists/es';
 
+// En inglés, la lista principal más sus formas (starve → starving, starved…)
+const en = enBase.concat(enForms);
 const LISTS: Record<Lang, string[]> = { en, fr, de, it, pt, es };
 
 const fold = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
@@ -49,5 +52,6 @@ export function suggest(input: string, lang: Lang, limit = 6): { list: string[];
     if (d <= max) near.push([d, i, w]);
   });
   near.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
-  return { list: out.concat(near.slice(0, limit - out.length).map((x) => x[2])), fuzzy: out.length === 0 && near.length > 0 };
+  const list = out.concat(near.slice(0, limit - out.length).map((x) => x[2]));
+  return { list, fuzzy: out.length === 0 && near.length > 0 && near[0][0] > 0 };
 }
