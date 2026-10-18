@@ -4,6 +4,7 @@ import { useStore } from '../lib/store';
 import { useTheme } from '../lib/theme';
 import { openIntro } from '../components/Intro';
 import InterestsScreen from './InterestsScreen';
+import AdminScreen from './AdminScreen';
 import { resetForYou } from '../lib/interests';
 import { supabase } from '../lib/supabase';
 import { LANGS } from '../lib/langs';
@@ -22,6 +23,9 @@ export default function MeScreen() {
   const { profile, words, stats, xpDays, lang } = useStore();
   const [settings, setSettings] = useState(false);
   const [interests, setInterests] = useState(false);
+  const [panel, setPanel] = useState(false);
+  const [admin, setAdmin] = useState(false);
+  useEffect(() => { supabase.rpc('is_admin').then(({ data }) => setAdmin(data === true)); }, []);
   const { session, updateProfile } = useStore();
   const [wins, setWins] = useState(0);
   const [allStickers, setAllStickers] = useState(false);
@@ -148,7 +152,8 @@ export default function MeScreen() {
           </View>
         </View>
       </ScrollView>
-      {settings && <SettingsSheet onClose={() => setSettings(false)} onInterests={() => { setSettings(false); setInterests(true); }} />}
+      {settings && <SettingsSheet admin={admin} onPanel={() => { setSettings(false); setPanel(true); }} onClose={() => setSettings(false)} onInterests={() => { setSettings(false); setInterests(true); }} />}
+      {panel && <AdminScreen onClose={() => setPanel(false)} />}
       {interests && (
         <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: t.bg, zIndex: 40 }}>
           <InterestsScreen editing initial={profile.interests} birthdate={profile.birthdate} onSkip={() => setInterests(false)}
@@ -161,7 +166,7 @@ export default function MeScreen() {
 
 const GOALS = [{ v: 30, l: 'Suave' }, { v: 60, l: 'Normal' }, { v: 120, l: 'Serio' }, { v: 200, l: 'Intenso' }];
 
-function SettingsSheet({ onClose, onInterests }: { onClose: () => void; onInterests: () => void }) {
+function SettingsSheet({ onClose, onInterests, admin, onPanel }: { onClose: () => void; onInterests: () => void; admin: boolean; onPanel: () => void }) {
   const t = useTheme();
   const { session, profile, stats, setDailyGoal, updateProfile } = useStore();
   const [pushMsg, setPushMsg] = useState<string | null>(null);
@@ -237,6 +242,7 @@ function SettingsSheet({ onClose, onInterests }: { onClose: () => void; onIntere
         {Platform.OS === 'web' && (
           <Text onPress={() => window.open('/privacidad.html', '_blank')} accessibilityRole="link" style={{ color: t.ink, fontWeight: '700', paddingVertical: 10 }}>Política de privacidad ›</Text>
         )}
+        {admin && <Text onPress={onPanel} accessibilityRole="button" style={{ color: t.blue, fontWeight: '800', paddingVertical: 10 }}>Panel de Wordazo ›</Text>}
         <Text onPress={onInterests} accessibilityRole="button" style={{ color: t.ink, fontWeight: '700', paddingVertical: 10 }}>Personalizar sugerencias ›</Text>
         <Text onPress={() => { onClose(); openIntro(); }} accessibilityRole="button" style={{ color: t.ink, fontWeight: '700', paddingVertical: 10 }}>Ver la introducción ›</Text>
         <Text onPress={() => supabase.auth.signOut()} accessibilityRole="button" style={{ color: t.ink, fontWeight: '700', paddingVertical: 10 }}>Cerrar sesión</Text>

@@ -16,6 +16,12 @@ Hecha con React Native (Expo) y Supabase.
 - **Yo:** calendario del mes, progreso en una frase, pegatinas y ajustes (objetivo diario, aviso diario, privacidad, cerrar sesión, borrar cuenta).
 - **Aviso diario:** como mucho uno al día, a la hora elegida, solo si aún no has jugado.
 
+## Panel de Wordazo (solo administradoras)
+
+En Yo → Ajustes → «Panel de Wordazo»: usuarios registrados y activos, altas por día, palabras, uso de la IA, idiomas, niveles, edades e intereses. Solo números totales.
+Solo lo ven las cuentas de la tabla `app_admins` (ahora: celiabanegas03@gmail.com y cbbbbanegas@gmail.com). Para añadir otra, en Supabase → SQL:
+`insert into app_admins(user_id) select id from auth.users where email = 'correo@ejemplo.com';`
+
 ## Cómo se controla el uso de la IA
 
 - **Diccionario compartido:** cada palabra se traduce una sola vez para todos los usuarios.
