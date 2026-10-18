@@ -7,7 +7,8 @@ export const INTERVAL_DAYS = [0, 0, 1, 3, 7, 21];
 export function regrade(w: Word, correct: boolean): Partial<Word> {
   const box = correct ? Math.min(5, w.box + 1) : 1;
   const due = new Date(Date.now() + INTERVAL_DAYS[box] * 86400000 - (correct ? 3600000 : 0));
-  return { box, due_at: due.toISOString(), seen: (w.seen || 0) + 1 };
+  // Si la aciertas, se borran sus fallos: deja de estar en «Te cuesta»
+  return { box, due_at: due.toISOString(), seen: (w.seen || 0) + 1, ...(correct ? { fails: 0 } : {}) };
 }
 
 export const isDue = (w: Word) => new Date(w.due_at).getTime() <= Date.now();
