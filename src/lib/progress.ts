@@ -71,12 +71,19 @@ export const ROUND_SIZE = Number.POSITIVE_INFINITY;
 let lastRound: { deck: string; ids: string[] } | null = null;
 export const rememberRound = (deck: string, ids: string[]) => { lastRound = { deck, ids }; };
 
-/** Elige, Tarjetas y Escribe eligen las palabras igual: primero las que tocan repasar, luego las menos sabidas. */
+// Acertadas en una ronda de Elige que no se terminó (te quedaste sin vidas): en la siguiente van al final
+const recentOk = new Map<string, Set<string>>();
+export const markOk = (deck: string, id: string) => { if (!recentOk.has(deck)) recentOk.set(deck, new Set()); recentOk.get(deck)!.add(id); };
+export const clearOk = (deck: string) => { recentOk.delete(deck); };
+
+/** Elige, Tarjetas y Escribe eligen las palabras igual: primero las que no acertaste en la ronda anterior, luego las que tocan repasar y las menos sabidas. */
 export function pickRound(pool: Word[], deck: string, n = ROUND_SIZE, reuse = false): Word[] {
   if (reuse && lastRound?.deck === deck) {
     const byId = new Map(pool.map((w) => [w.id, w]));
     const same = lastRound.ids.map((id) => byId.get(id)).filter((w): w is Word => !!w);
     if (same.length) return shuffle(same);
   }
-  return shuffle(pool).sort((a, b) => Number(isDue(b)) - Number(isDue(a)) || a.box - b.box).slice(0, n);
+  const ok = recentOk.get(deck);
+  const done = (w: Word) => Number(!!ok?.has(w.id));
+  return shuffle(pool).sort((a, b) => done(a) - done(b) || Number(isDue(b)) - Number(isDue(a)) || a.box - b.box).slice(0, n);
 }

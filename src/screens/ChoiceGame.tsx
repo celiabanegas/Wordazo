@@ -5,7 +5,7 @@ import { useStore } from '../lib/store';
 import { useTheme } from '../lib/theme';
 import { supabase } from '../lib/supabase';
 import { cap, shortMeaning, shuffle, norm } from '../lib/text';
-import { ROUND_SIZE, pickRound, playable, regrade, rememberRound } from '../lib/progress';
+import { ROUND_SIZE, clearOk, markOk, pickRound, playable, regrade, rememberRound } from '../lib/progress';
 import { say } from '../lib/speech';
 import { SPANISH_DECOYS, SPANISH_DEF_DECOYS } from '../lib/distractors';
 import { isHard, type Deck, type Word } from '../lib/types';
@@ -116,6 +116,7 @@ export default function ChoiceGame({ onExit, challengeId, hardOnly }: { onExit: 
   }, [i, roundId]);
 
   const finish = useCallback(async (f: { xp: number; answered: number; correct: number; maxCombo: number; lives: number; skipped: number }) => {
+    if (f.lives > 0) clearOk(deck); // ronda completa: la siguiente empieza de cero
     const perfect = f.lives === LIVES && f.skipped === 0 && f.answered >= 5;
     const bonus = perfect ? Math.round(f.xp * 0.2) : 0;
     const total = f.xp + bonus;
@@ -152,7 +153,7 @@ export default function ChoiceGame({ onExit, challengeId, hardOnly }: { onExit: 
     setAnswered(nAnswered);
 
     if (ok) {
-      if (!graded.current.has(q.word.id)) { graded.current.add(q.word.id); patchWord(q.word.id, regrade(q.word, true)); }
+      if (!graded.current.has(q.word.id)) { graded.current.add(q.word.id); patchWord(q.word.id, regrade(q.word, true)); markOk(deck, q.word.id); }
       const nCombo = combo + 1;
       const mult = comboMult(nCombo);
       const earned = (10 + Math.round(left * 5)) * mult;
