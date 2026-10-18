@@ -9,7 +9,7 @@ import { cap, capList, norm, shuffle } from '../lib/text';
 import { isDue } from '../lib/progress';
 import { say } from '../lib/speech';
 import { supabase } from '../lib/supabase';
-import { LANGS, TOPICS, type Lang } from '../lib/langs';
+import { LANGS, SECTORS, TOPICS, type Lang } from '../lib/langs';
 import { isHard, type Word } from '../lib/types';
 import { DAILY_WORD_LIMIT } from '../lib/config';
 import { Btn, Chip, Speaker } from '../components/ui';
@@ -18,7 +18,7 @@ type Sugg = { term: string; translation: string; reason?: string };
 
 export default function WordsScreen({ onPlay }: { onPlay: () => void }) {
   const t = useTheme();
-  const { words, addWord, removeWord, retryTranslate, patchWord, loading, lang } = useStore();
+  const { words, addWord, removeWord, retryTranslate, patchWord, loading, lang, profile } = useStore();
   const [term, setTerm] = useState('');
   const [q, setQ] = useState('');
   const [flash, setFlash] = useState<{ text: string; bad?: boolean } | null>(null);
@@ -92,7 +92,7 @@ export default function WordsScreen({ onPlay }: { onPlay: () => void }) {
           )}
           {!typing && flash && <Text style={{ color: flash.bad ? t.bad : t.good, fontWeight: '700' }}>{flash.text}</Text>}
         </View>
-        {!typing && !loading && <Suggestions lang={lang} saved={saved} count={mine.length} onSave={save} onPlay={onPlay} />}
+        {!typing && !loading && <Suggestions key={JSON.stringify(profile.interests ?? null)} lang={lang} saved={saved} count={mine.length} onSave={save} onPlay={onPlay} />}
       </ScrollView>
     );
   }
@@ -146,8 +146,18 @@ function Suggestions({ lang, saved, count, onSave, onPlay }: { lang: Lang; saved
   const t = useTheme();
   const { profile } = useStore();
   const more = count > 0;
-  const personal = count >= 3; // con pocas palabras aún no hay base para recomendar
-  const [topic, setTopic] = useState<string>(personal ? FOR_YOU : TOPICS[0].v);
+  const mineI = profile.interests || {};
+  const hasProfile = !!(mineI.goals?.length || mineI.situation || mineI.topics?.length);
+  const personal = count >= 3 || hasProfile; // sin palabras ni perfil aún no hay base para recomendar
+  // Temas: primero los que le gustan y, si trabaja, uno de su sector
+  const sector = SECTORS.find((x) => x.v === mineI.sector);
+  const topicList = [
+    ...(sector ? [{ v: `sector_${sector.v}`, l: 'Mi trabajo' }] : []),
+    ...TOPICS.filter((x) => mineI.topics?.includes(x.v)),
+    ...TOPICS.filter((x) => !mineI.topics?.includes(x.v)),
+  ];
+  const [topic, setTopic] = useState<string>(personal ? FOR_YOU : topicList[0].v);
+  const [allTopics, setAllTopics] = useState(false);
   const [pool, setPool] = useState<Sugg[]>([]);       // todas las palabras recibidas de este tema
   const [nextPage, setNextPage] = useState(1);
   const [done, setDone] = useState(false);             // el servidor ya no da más páginas
@@ -244,7 +254,8 @@ function Suggestions({ lang, saved, count, onSave, onPlay }: { lang: Lang; saved
       </View>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
         {personal && <Chip label="Para ti" on={topic === FOR_YOU} onPress={() => setTopic(FOR_YOU)} />}
-        {TOPICS.map((x) => <Chip key={x.v} label={x.l} on={topic === x.v} onPress={() => setTopic(x.v)} />)}
+        {(allTopics ? topicList : topicList.filter((x, k) => k < 6 || x.v === topic)).map((x) => <Chip key={x.v} label={x.l} on={topic === x.v} onPress={() => setTopic(x.v)} />)}
+        {!allTopics && topicList.length > 6 && <Chip label="Más temas ›" onPress={() => setAllTopics(true)} />}
       </View>
       <View style={{ backgroundColor: t.card, borderRadius: 16, borderWidth: 1, borderColor: t.line, paddingHorizontal: 14 }}>
         {loadingFirst && <ActivityIndicator color={t.muted} style={{ paddingVertical: 30 }} />}

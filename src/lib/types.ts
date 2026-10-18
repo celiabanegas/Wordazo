@@ -1,3 +1,4 @@
+import type { Interests } from './langs';
 import type { Lang, Level } from './langs';
 
 export type Deck = Lang;
@@ -56,6 +57,7 @@ export type Profile = {
   tz: string;
   onboarded: boolean;
   username: string | null;
+  interests: Interests | null;
   created_at: string;
 };
 

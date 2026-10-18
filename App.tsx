@@ -14,6 +14,8 @@ import AuthScreen, { NewPasswordScreen } from './src/screens/AuthScreen';
 import { CompleteProfileScreen, GuardianApproveScreen, GuardianScreen, LanguageScreen } from './src/screens/Onboarding';
 import WordsScreen from './src/screens/WordsScreen';
 import Intro, { useIntro } from './src/components/Intro';
+import InterestsScreen from './src/screens/InterestsScreen';
+import { resetForYou } from './src/lib/interests';
 import PlayScreen, { type Game } from './src/screens/PlayScreen';
 import ChoiceGame from './src/screens/ChoiceGame';
 import { CardsGame, WriteGame } from './src/screens/PracticeGames';
@@ -96,6 +98,11 @@ function Gate({ session }: { session: Session }) {
     return <GuardianScreen profile={profile} onRecheck={load} onName={(n) => patch({ display_name: n })} />;
   }
   if (!profile.onboarded) return <LanguageScreen profile={profile} onSave={patch} />;
+  // Personalización de sugerencias: se pregunta una vez (null = aún no; {} = lo saltó)
+  if (profile.interests == null) {
+    return <InterestsScreen initial={null} birthdate={profile.birthdate}
+      onSave={async (i) => { await patch({ interests: i }); await resetForYou(session.user.id); }} onSkip={() => patch({ interests: {} })} />;
+  }
   return <StoreProvider session={session} initialProfile={profile}><Main /></StoreProvider>;
 }
 

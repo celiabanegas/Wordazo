@@ -9,6 +9,7 @@ Hecha con React Native (Expo) y Supabase.
 - **Menores de 14 años:** la cuenta no se activa hasta que la madre, el padre o el tutor da su permiso desde un email.
 - **Idiomas:** inglés, francés, alemán, italiano, portugués y español culto. Cada idioma con sus palabras y su progreso. Nivel ajustable.
 - **Palabras:** sugerencias mientras escribes (corrige erratas), traducción automática con 3 ejemplos traducidos, avisos de falsos amigos, pronunciación con la voz del dispositivo.
+- **Personalización:** al empezar (y en Yo → Ajustes) se pregunta, de forma opcional, para qué quiere aprender, a qué se dedica (sector y puesto si trabaja; no se pregunta a menores de 16) y qué temas le gustan. «Para ti» usa esos datos desde el primer día y aparece el tema «Mi trabajo».
 - **Palabras:** dos pestañas, «Añadir» y «Mis palabras». En «Añadir» hay un único bloque de sugerencias: «Para ti» (9 a la semana, según tus palabras, a partir de 3 guardadas) o por tema (series, viajes, redes…), de 6 en 6.
 - **Juegos:** Elige (todas las palabras de tu banco en cada ronda, 3 vidas, reloj, combos ×4, opciones pensadas para confundir, botón «No la sé · Pasar»), repaso de lo que te cuesta, Tarjetas y Escribe.
 - **Amigos:** liga semanal y retos de 24 h por enlace (WhatsApp, Instagram…). Sin chat. Solo se ve el nombre de pila y la inicial.

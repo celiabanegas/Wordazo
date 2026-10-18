@@ -49,6 +49,27 @@ async function askAI(prompt: string, maxTokens: number): Promise<string> {
   }
   throw new Error("missing_key");
 }
+const GOALS: Record<string, string> = { viajar: "viajar", trabajo: "su trabajo", estudios: "estudios y exámenes", ocio: "series, música y videojuegos", gente: "hablar con gente", vivir: "vivir en otro país" };
+const SITUATION: Record<string, string> = { instituto: "va al instituto", uni: "estudia en la universidad o FP", trabajo: "trabaja", busco: "busca trabajo", otro: "" };
+const SECTOR: Record<string, string> = { tecnologia: "tecnología", salud: "salud", hosteleria: "hostelería y turismo", comercio: "comercio y ventas", educacion: "educación", ingenieria: "ingeniería e industria", finanzas: "administración y finanzas", diseno: "arte, diseño y comunicación", campo: "campo y medio ambiente", derecho: "derecho" };
+const TOPIC: Record<string, string> = { series: "series y pelis", viajes: "viajes", redes: "redes sociales", deporte: "deporte", clase: "clase", trabajo: "trabajo", comida: "comida", musica: "música", tecnologia: "tecnología", videojuegos: "videojuegos", moda: "moda", ciencia: "ciencia", negocios: "negocios", naturaleza: "naturaleza" };
+// Resumen del perfil para la IA: solo rango de edad (nunca la fecha) y lo que eligió
+function describe(i: { goals?: string[]; situation?: string; sector?: string; job?: string; topics?: string[] } | null | undefined, birth?: string | null) {
+  const parts: string[] = [];
+  if (birth) {
+    const b = new Date(birth); const n = new Date();
+    const age = n.getFullYear() - b.getFullYear() - (n < new Date(n.getFullYear(), b.getMonth(), b.getDate()) ? 1 : 0);
+    parts.push(age < 14 ? "menos de 14 años" : age < 18 ? "entre 14 y 17 años" : age < 25 ? "entre 18 y 24 años" : age < 35 ? "entre 25 y 34 años" : age < 50 ? "entre 35 y 49 años" : "50 años o más");
+  }
+  if (!i) return "";
+  const sit = SITUATION[i.situation ?? ""];
+  if (sit) parts.push(sit + (i.sector && SECTOR[i.sector] ? ` (sector: ${SECTOR[i.sector]})` : "") + (i.job ? ` (puesto: ${String(i.job).replace(/[^\p{L}\p{N} ,.-]/gu, "").slice(0, 40)})` : ""));
+  const g = (i.goals ?? []).map((x) => GOALS[x]).filter(Boolean);
+  if (g.length) parts.push(`quiere aprender para: ${g.join(", ")}`);
+  const tp = (i.topics ?? []).map((x) => TOPIC[x]).filter(Boolean);
+  if (tp.length) parts.push(`le interesan: ${tp.join(", ")}`);
+  return parts.length > 1 || i.goals?.length || i.situation || i.topics?.length ? parts.join("; ") : "";
+}
 const monday = () => { const d = new Date(); const day = (d.getUTCDay() + 6) % 7; d.setUTCDate(d.getUTCDate() - day); return d.toISOString().slice(0, 10); };
 
 Deno.serve(async (req) => {
@@ -71,16 +92,18 @@ Deno.serve(async (req) => {
 
   const [{ data: words }, { data: prof }] = await Promise.all([
     admin.from("words").select("term, fails, box").eq("user_id", uid).eq("deck", lang).order("created_at", { ascending: false }).limit(60),
-    admin.from("profiles").select("level").eq("user_id", uid).maybeSingle(),
+    admin.from("profiles").select("level, interests, birthdate").eq("user_id", uid).maybeSingle(),
   ]);
-  if (!words || words.length < 3) return json({ items: [] }); // con pocas palabras se usan los paquetes de inicio
+  const about = describe(prof?.interests, prof?.birthdate);
+  // Sin perfil y con pocas palabras no hay base: se usan los paquetes por tema
+  if (!about && (!words || words.length < 3)) return json({ items: [] });
 
-  const terms = words.map((w) => w.term);
-  const hard = words.filter((w) => w.fails >= 2 && w.box <= 2).map((w) => w.term).slice(0, 10);
+  const terms = (words ?? []).map((w) => w.term);
+  const hard = (words ?? []).filter((w) => w.fails >= 2 && w.box <= 2).map((w) => w.term).slice(0, 10);
   let text = "";
-  try { text = await askAI(`Un hispanohablante joven de nivel ${LEVEL[prof?.level ?? "mid"]} aprende ${LANG[lang]}.
-Ya tiene guardadas: ${terms.join(", ")}.${hard.length ? ` Le cuestan: ${hard.join(", ")}.` : ""}${prev.length ? ` Ya le propusiste (no las repitas): ${prev.map((i) => i.term).join(", ")}.` : ""}
-Propón 9 palabras o expresiones nuevas de ${LANG[lang]} que le convenga aprender ahora y que NO estén en su lista. Mezcla palabras parecidas o relacionadas con las suyas, alternativas más usadas, falsos amigos frecuentes y vocabulario de los mismos temas.
+  try { text = await askAI(`Un hispanohablante de nivel ${LEVEL[prof?.level ?? "mid"]} aprende ${LANG[lang]}.${about ? `\nSobre él o ella: ${about}.` : ""}
+${terms.length ? `Ya tiene guardadas: ${terms.join(", ")}.` : "Aún no tiene palabras guardadas."}${hard.length ? ` Le cuestan: ${hard.join(", ")}.` : ""}${prev.length ? ` Ya le propusiste (no las repitas): ${prev.map((i) => i.term).join(", ")}.` : ""}
+Propón 9 palabras o expresiones nuevas de ${LANG[lang]} que le convenga aprender ahora y que NO estén en su lista. Que le sirvan en su vida real según lo que sabes de él o ella (su trabajo, sus objetivos y sus temas)${terms.length ? ", mezcladas con palabras parecidas o relacionadas con las suyas, alternativas más usadas y falsos amigos frecuentes" : ""}. Adecuadas para su edad.
 Responde SOLO con JSON: {"items":[{"term":"palabra","translation":"${lang === "es" ? "definición breve" : "traducción breve al español"}","reason":"motivo en máximo 5 palabras, p. ej. «Parecida a thorough» o «Falso amigo frecuente»"}]}`, 700); }
   catch (e) { console.error(String(e)); return json({ error: String(e).startsWith("Error: missing_key") ? "missing_key" : "upstream" }, 502); }
   try {

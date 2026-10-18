@@ -7,6 +7,14 @@ const LANG: Record<string, string> = { en: "inglés", fr: "francés", de: "alem�
 const TOPICS: Record<string, string> = {
   series: "series, películas y streaming", viajes: "viajes", redes: "redes sociales e internet", deporte: "deporte",
   clase: "el instituto y la universidad", trabajo: "el trabajo", comida: "comida y restaurantes", musica: "música y conciertos",
+  tecnologia: "tecnología, móviles e inteligencia artificial", videojuegos: "videojuegos y gaming", moda: "moda y estilo", ciencia: "ciencia y medio ambiente",
+  negocios: "negocios, dinero y emprendimiento", naturaleza: "naturaleza, animales y aire libre",
+  // «Mi trabajo»: vocabulario profesional por sector (compartido por todos los de ese sector)
+  sector_tecnologia: "el trabajo en tecnología e informática", sector_salud: "el trabajo en sanidad (hospital, consulta, pacientes)",
+  sector_hosteleria: "el trabajo en hostelería y turismo (hotel, restaurante, clientes)", sector_comercio: "el trabajo en comercio y ventas",
+  sector_educacion: "el trabajo en educación (aula, alumnos, evaluación)", sector_ingenieria: "el trabajo en ingeniería e industria",
+  sector_finanzas: "el trabajo en administración, contabilidad y finanzas", sector_diseno: "el trabajo en arte, diseño, marketing y comunicación",
+  sector_campo: "el trabajo en agricultura, ganadería y medio ambiente", sector_derecho: "el trabajo en derecho y despachos legales",
 };
 const LEVEL: Record<string, string> = { low: "principiante (A1-A2)", mid: "intermedio (B1)", high: "avanzado (B2-C1)" };
 const cors = {

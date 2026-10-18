@@ -3,6 +3,8 @@ import { Platform, Pressable, ScrollView, Text, View } from 'react-native';
 import { useStore } from '../lib/store';
 import { useTheme } from '../lib/theme';
 import { openIntro } from '../components/Intro';
+import InterestsScreen from './InterestsScreen';
+import { resetForYou } from '../lib/interests';
 import { supabase } from '../lib/supabase';
 import { LANGS } from '../lib/langs';
 import { liveStreak } from '../lib/progress';
@@ -19,6 +21,8 @@ export default function MeScreen() {
   const t = useTheme();
   const { profile, words, stats, xpDays, lang } = useStore();
   const [settings, setSettings] = useState(false);
+  const [interests, setInterests] = useState(false);
+  const { session, updateProfile } = useStore();
   const [wins, setWins] = useState(0);
   const [allStickers, setAllStickers] = useState(false);
 
@@ -144,14 +148,20 @@ export default function MeScreen() {
           </View>
         </View>
       </ScrollView>
-      {settings && <SettingsSheet onClose={() => setSettings(false)} />}
+      {settings && <SettingsSheet onClose={() => setSettings(false)} onInterests={() => { setSettings(false); setInterests(true); }} />}
+      {interests && (
+        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: t.bg, zIndex: 40 }}>
+          <InterestsScreen editing initial={profile.interests} birthdate={profile.birthdate} onSkip={() => setInterests(false)}
+            onSave={async (i) => { await updateProfile({ interests: i }); await resetForYou(session.user.id); setInterests(false); }} />
+        </View>
+      )}
     </View>
   );
 }
 
 const GOALS = [{ v: 30, l: 'Suave' }, { v: 60, l: 'Normal' }, { v: 120, l: 'Serio' }, { v: 200, l: 'Intenso' }];
 
-function SettingsSheet({ onClose }: { onClose: () => void }) {
+function SettingsSheet({ onClose, onInterests }: { onClose: () => void; onInterests: () => void }) {
   const t = useTheme();
   const { session, profile, stats, setDailyGoal, updateProfile } = useStore();
   const [pushMsg, setPushMsg] = useState<string | null>(null);
@@ -227,6 +237,7 @@ function SettingsSheet({ onClose }: { onClose: () => void }) {
         {Platform.OS === 'web' && (
           <Text onPress={() => window.open('/privacidad.html', '_blank')} accessibilityRole="link" style={{ color: t.ink, fontWeight: '700', paddingVertical: 10 }}>Política de privacidad ›</Text>
         )}
+        <Text onPress={onInterests} accessibilityRole="button" style={{ color: t.ink, fontWeight: '700', paddingVertical: 10 }}>Personalizar sugerencias ›</Text>
         <Text onPress={() => { onClose(); openIntro(); }} accessibilityRole="button" style={{ color: t.ink, fontWeight: '700', paddingVertical: 10 }}>Ver la introducción ›</Text>
         <Text onPress={() => supabase.auth.signOut()} accessibilityRole="button" style={{ color: t.ink, fontWeight: '700', paddingVertical: 10 }}>Cerrar sesión</Text>
         <Text onPress={deleteAccount} accessibilityRole="button" style={{ color: t.bad, fontWeight: del ? '800' : '700', paddingVertical: 10 }}>
