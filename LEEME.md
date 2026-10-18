@@ -74,5 +74,6 @@ Instala **Expo Go** en el móvil y ejecuta `npx expo start`. Escanea el código 
 - `App.tsx` – arranque, comprobaciones de cuenta y pestañas.
 - `src/screens/` – pantallas (entrar, registro y permiso, palabras, juegos, amigos, Yo).
 - `src/lib/` – datos, idiomas, sugerencias, voz, avisos y reglas de contraseña.
+- `public/words/` – listas de palabras para las sugerencias al escribir (una por idioma, se descargan solo al usarlas). Se regeneran con `scripts/build_words.py`.
 - `supabase/functions/` – funciones del servidor: `translate`, `starter`, `suggest`, `guardian`, `delete-account`, `daily-reminder`. Ya están desplegadas; aquí está su código para futuros cambios.
 - `public/` – icono, archivo de instalación, service worker (caché y avisos) y política de privacidad.

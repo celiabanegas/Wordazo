@@ -4,7 +4,7 @@ import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useStore } from '../lib/store';
 import { useTheme } from '../lib/theme';
-import { suggest } from '../lib/suggest';
+import { loadWords, suggest } from '../lib/suggest';
 import { cap, capList, norm, shuffle } from '../lib/text';
 import { isDue } from '../lib/progress';
 import { say } from '../lib/speech';
@@ -27,7 +27,9 @@ export default function WordsScreen({ onPlay }: { onPlay: () => void }) {
 
   const mine = useMemo(() => words.filter((w) => w.deck === lang), [words, lang]);
   const saved = useMemo(() => new Set(mine.map((w) => norm(w.term))), [mine]);
-  const sugg = useMemo(() => suggest(term, lang, 6), [term, lang]);
+  const [listReady, setListReady] = useState(0); // la lista de palabras del idioma se descarga al entrar
+  useEffect(() => { let alive = true; loadWords(lang).then(() => alive && setListReady((n) => n + 1)); return () => { alive = false; }; }, [lang]);
+  const sugg = useMemo(() => suggest(term, lang, 6), [term, lang, listReady]); // eslint-disable-line react-hooks/exhaustive-deps
   const shown = useMemo(() => {
     const nq = norm(q);
     return nq ? mine.filter((w) => norm(w.term).includes(nq) || norm(w.meaning).includes(nq)) : mine;

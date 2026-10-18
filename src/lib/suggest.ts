@@ -1,15 +1,22 @@
+import { Platform } from 'react-native';
 import type { Lang } from './langs';
-import enBase from './wordlists/en';
-import enForms from './wordlists/en-forms';
-import fr from './wordlists/fr';
-import de from './wordlists/de';
-import it from './wordlists/it';
-import pt from './wordlists/pt';
-import es from './wordlists/es';
+import { SITE_URL } from './config';
 
-// En inglés, la lista principal más sus formas (starve → starving, starved…)
-const en = enBase.concat(enForms);
-const LISTS: Record<Lang, string[]> = { en, fr, de, it, pt, es };
+// Listas de palabras por idioma (palabras frecuentes más sus formas: plurales, conjugaciones…).
+// Están en public/words/ y se descargan solo las del idioma que se usa, una vez; el service worker las guarda para usarlas sin conexión.
+const LISTS: Partial<Record<Lang, string[]>> = {};
+const loading: Partial<Record<Lang, Promise<string[]>>> = {};
+export function loadWords(lang: Lang): Promise<string[]> {
+  if (LISTS[lang]) return Promise.resolve(LISTS[lang]!);
+  if (!loading[lang]) {
+    const url = `${Platform.OS === 'web' ? '' : SITE_URL}/words/${lang}.txt?v=2`;
+    loading[lang] = fetch(url)
+      .then((r) => (r.ok ? r.text() : Promise.reject(new Error(String(r.status)))))
+      .then((t) => (LISTS[lang] = t.split('\n').filter(Boolean)))
+      .catch(() => { delete loading[lang]; return []; });
+  }
+  return loading[lang]!;
+}
 
 const fold = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 
@@ -38,6 +45,7 @@ export function suggest(input: string, lang: Lang, limit = 6): { list: string[];
   const q = fold(input.trim().replace(/^to\s+/i, ''));
   if (q.length < 2 || /[0-9]/.test(q)) return { list: [], fuzzy: false };
   const words = LISTS[lang];
+  if (!words) { loadWords(lang); return { list: [], fuzzy: false }; }
   const out: string[] = [];
   for (const w of words) {
     if (out.length >= limit) break;
