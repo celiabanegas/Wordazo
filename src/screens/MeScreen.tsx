@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Platform, Pressable, ScrollView, Text, View } from 'react-native';
 import { useStore } from '../lib/store';
 import { useTheme } from '../lib/theme';
+import { openIntro } from '../components/Intro';
 import { supabase } from '../lib/supabase';
 import { LANGS } from '../lib/langs';
 import { liveStreak } from '../lib/progress';
@@ -226,6 +227,7 @@ function SettingsSheet({ onClose }: { onClose: () => void }) {
         {Platform.OS === 'web' && (
           <Text onPress={() => window.open('/privacidad.html', '_blank')} accessibilityRole="link" style={{ color: t.ink, fontWeight: '700', paddingVertical: 10 }}>Política de privacidad ›</Text>
         )}
+        <Text onPress={() => { onClose(); openIntro(); }} accessibilityRole="button" style={{ color: t.ink, fontWeight: '700', paddingVertical: 10 }}>Ver la introducción ›</Text>
         <Text onPress={() => supabase.auth.signOut()} accessibilityRole="button" style={{ color: t.ink, fontWeight: '700', paddingVertical: 10 }}>Cerrar sesión</Text>
         <Text onPress={deleteAccount} accessibilityRole="button" style={{ color: t.bad, fontWeight: del ? '800' : '700', paddingVertical: 10 }}>
           {del === 2 ? 'Borrando…' : del === 1 ? 'Toca otra vez para borrar tu cuenta y todas tus palabras' : 'Borrar mi cuenta'}

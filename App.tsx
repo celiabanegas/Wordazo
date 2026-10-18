@@ -13,6 +13,7 @@ import type { Profile } from './src/lib/types';
 import AuthScreen, { NewPasswordScreen } from './src/screens/AuthScreen';
 import { CompleteProfileScreen, GuardianApproveScreen, GuardianScreen, LanguageScreen } from './src/screens/Onboarding';
 import WordsScreen from './src/screens/WordsScreen';
+import Intro, { useIntro } from './src/components/Intro';
 import PlayScreen, { type Game } from './src/screens/PlayScreen';
 import ChoiceGame from './src/screens/ChoiceGame';
 import { CardsGame, WriteGame } from './src/screens/PracticeGames';
@@ -109,6 +110,7 @@ export function Main() {
   const [langSheet, setLangSheet] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [decided, setDecided] = useState(false);
+  const intro = useIntro();
 
   // Al entrar: si ya hay palabras listas, abre «Jugar»
   useEffect(() => {
@@ -186,6 +188,7 @@ export function Main() {
       </SafeAreaView>
 
       {langSheet && <LangSheet onClose={() => setLangSheet(false)} />}
+      {intro.show && <Intro onClose={intro.close} />}
     </View>
   );
 }

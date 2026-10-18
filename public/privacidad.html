@@ -9,9 +9,21 @@
   h1{font-size:28px;margin:0 0 4px}h2{font-size:19px;margin:28px 0 6px}
   .draft{background:#FFCF33;color:#2A2100;padding:10px 12px;border-radius:10px;font-weight:600}
   mark{background:#FFE58A;color:#2A2100}
+  .back{position:sticky;top:0;display:flex;justify-content:flex-start;padding:10px 0;margin:-24px 0 12px;background:inherit}
+  .back button{font:inherit;font-weight:700;border:0;border-radius:12px;padding:10px 16px;background:#18202E;color:#fff;cursor:pointer}
+  @media (prefers-color-scheme:dark){.back button{background:#E8ECF2;color:#10141C}}
 </style>
 </head>
 <body>
+<div class="back"><button type="button" onclick="volver()">← Volver a Wordazo</button></div>
+<script>
+  // Si se abrió en otra pestaña, la cierra; si no, vuelve atrás o a la app
+  function volver() {
+    if (window.opener) { window.close(); }
+    if (history.length > 1 && document.referrer && new URL(document.referrer).origin === location.origin) { history.back(); return; }
+    setTimeout(function () { location.href = '/'; }, 150);
+  }
+</script>
 <h1>Política de privacidad de Wordazo</h1>
 <p class="draft">Borrador pendiente de revisión legal. Completa los datos marcados en amarillo antes de publicar la app.</p>
 

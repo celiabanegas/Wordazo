@@ -133,6 +133,7 @@ export default function WordsScreen({ onPlay }: { onPlay: () => void }) {
         <WordRow w={item} open={openId === item.id} confirming={confirmId === item.id}
           onToggle={() => { setOpenId(openId === item.id ? null : item.id); setConfirmId(null); }}
           onDelete={() => { if (confirmId === item.id) { setConfirmId(null); setOpenId(null); removeWord(item.id); } else setConfirmId(item.id); }}
+          onCancelDelete={() => setConfirmId(null)}
           onRetry={() => retryTranslate(item)} onArchive={() => patchWord(item.id, { archived: !item.archived })} />
       )}
     />
@@ -175,7 +176,7 @@ function Suggestions({ lang, saved, count, onSave, onPlay }: { lang: Lang; saved
   const visible = pool
     .filter((w) => !skipped.has(norm(w.term)) && (!saved.has(norm(w.term)) || addedHere.has(norm(w.term))))
     .slice(0, 6);
-  const exhausted = done || nextPage > 10;
+  const exhausted = done || nextPage > (topic === FOR_YOU ? 5 : 10);
 
   // Pide más páginas (24 palabras cada una) hasta tener 6 que aún no tienes ni has pasado
   useEffect(() => {
@@ -185,7 +186,7 @@ function Suggestions({ lang, saved, count, onSave, onPlay }: { lang: Lang; saved
     const g = gen.current;
     // «Para ti»: 9 palabras por semana calculadas en el servidor (una sola página). Temas: páginas de 24.
     const call = topic === FOR_YOU
-      ? supabase.functions.invoke('suggest', { body: { lang } }).then(({ data, error }) => ({ error, list: data?.items }))
+      ? supabase.functions.invoke('suggest', { body: { lang, page: nextPage } }).then(({ data, error }) => ({ error, list: data?.items }))
       : supabase.functions.invoke('starter', { body: { lang, level: profile.level, topic, page: nextPage } }).then(({ data, error }) => ({ error, list: data?.words }));
     call.then(({ error, list }) => {
       inflight.current = false;
@@ -197,7 +198,7 @@ function Suggestions({ lang, saved, count, onSave, onPlay }: { lang: Lang; saved
         const have = new Set(p.map((w) => norm(w.term)));
         return [...p, ...(topic === FOR_YOU ? list as Sugg[] : shuffle(list as Sugg[])).filter((w) => !have.has(norm(w.term)))];
       });
-      if (topic === FOR_YOU) setDone(true); else setNextPage((n) => n + 1);
+      setNextPage((n) => n + 1);
     });
   }, [ready, visible.length, exhausted, fetching, failed, nextPage, lang, topic, profile.level]);
 
@@ -211,6 +212,15 @@ function Suggestions({ lang, saved, count, onSave, onPlay }: { lang: Lang; saved
     setSkipped(n);
     AsyncStorage.setItem(seenKey, JSON.stringify([...n].slice(-400))).catch(() => {});
   };
+
+  // Las que ya te ha enseñado cuentan como vistas: la próxima vez que entres verás otras
+  const visibleKey = visible.map((w) => norm(w.term)).join('|');
+  useEffect(() => {
+    if (!ready || !visibleKey) return;
+    const all = new Set(skipped);
+    visibleKey.split('|').forEach((k) => all.add(k));
+    AsyncStorage.setItem(seenKey, JSON.stringify([...all].slice(-400))).catch(() => {});
+  }, [visibleKey, ready]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const add = async (term: string) => {
     setAddedHere((s) => new Set(s).add(norm(term)));
@@ -272,8 +282,8 @@ function Suggestions({ lang, saved, count, onSave, onPlay }: { lang: Lang; saved
   );
 }
 
-function WordRow({ w, open, confirming, onToggle, onDelete, onRetry, onArchive }: {
-  w: Word; open: boolean; confirming: boolean; onToggle: () => void; onDelete: () => void; onRetry: () => void; onArchive: () => void;
+function WordRow({ w, open, confirming, onToggle, onDelete, onCancelDelete, onRetry, onArchive }: {
+  w: Word; open: boolean; confirming: boolean; onToggle: () => void; onDelete: () => void; onCancelDelete: () => void; onRetry: () => void; onArchive: () => void;
 }) {
   const t = useTheme();
   const meaning = w.status === 'pending' ? 'Traduciendo…' : w.status === 'error' ? 'Sin traducción' : cap(w.meaning);
@@ -288,6 +298,21 @@ function WordRow({ w, open, confirming, onToggle, onDelete, onRetry, onArchive }
           : w.box === 5 ? <Badge text="DOMINADA" bg={t.accent} fg={t.accentInk} />
           : isHard(w) ? <Badge text="TE CUESTA" bg={t.badSoft} fg={t.bad} />
           : <View style={{ flexDirection: 'row', gap: 3 }}>{[1, 2, 3, 4, 5].map((i) => <View key={i} style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: i <= w.box ? t.accent : t.line }} />)}</View>}
+        {confirming ? (
+          <View style={{ flexDirection: 'row', gap: 6 }}>
+            <Pressable onPress={onCancelDelete} accessibilityRole="button" style={{ paddingVertical: 8, paddingHorizontal: 10, borderRadius: 10, borderWidth: 1, borderColor: t.line }}>
+              <Text style={{ color: t.ink, fontWeight: '700' }}>No</Text>
+            </Pressable>
+            <Pressable onPress={onDelete} accessibilityRole="button" accessibilityLabel={`Confirmar borrar ${w.term}`} style={{ paddingVertical: 8, paddingHorizontal: 10, borderRadius: 10, backgroundColor: t.bad }}>
+              <Text style={{ color: '#fff', fontWeight: '800' }}>Borrar</Text>
+            </Pressable>
+          </View>
+        ) : (
+          <Pressable onPress={onDelete} accessibilityRole="button" accessibilityLabel={`Borrar ${w.term}`} hitSlop={6}
+            style={({ pressed }) => ({ width: 38, height: 38, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: pressed ? t.badSoft : 'transparent' })}>
+            <TrashIcon color={t.bad} />
+          </Pressable>
+        )}
       </View>
       {open && (
         <View style={{ gap: 8 }}>
@@ -315,9 +340,6 @@ function WordRow({ w, open, confirming, onToggle, onDelete, onRetry, onArchive }
                 {w.archived ? 'Volver a jugar con ella' : 'Sacar del juego'}
               </Text>
             )}
-            <Text onPress={onDelete} accessibilityRole="button" style={{ color: t.bad, fontWeight: confirming ? '800' : '600', paddingVertical: 4 }}>
-              {confirming ? 'Toca otra vez para borrar' : 'Borrar palabra'}
-            </Text>
           </View>
           {w.archived && <Text style={{ color: t.muted, fontSize: 13 }}>No te la preguntaremos en los juegos. Sigue en tu lista.</Text>}
         </View>
@@ -325,6 +347,18 @@ function WordRow({ w, open, confirming, onToggle, onDelete, onRetry, onArchive }
     </Pressable>
   );
 }
+
+/** Papelera dibujada (tapa, asa y cubo con rayas) */
+const TrashIcon = ({ color }: { color: string }) => (
+  <View style={{ alignItems: 'center' }}>
+    <View style={{ width: 6, height: 2, borderTopLeftRadius: 2, borderTopRightRadius: 2, backgroundColor: color }} />
+    <View style={{ width: 16, height: 2, borderRadius: 1, backgroundColor: color, marginBottom: 1 }} />
+    <View style={{ width: 12, height: 13, borderWidth: 2, borderTopWidth: 0, borderColor: color, borderBottomLeftRadius: 3, borderBottomRightRadius: 3, flexDirection: 'row', justifyContent: 'space-evenly', paddingTop: 2, paddingBottom: 2 }}>
+      <View style={{ width: 1.5, backgroundColor: color }} />
+      <View style={{ width: 1.5, backgroundColor: color }} />
+    </View>
+  </View>
+);
 
 const Badge = ({ text, bg, fg }: { text: string; bg: string; fg: string }) => (
   <Text style={{ color: fg, backgroundColor: bg, fontWeight: '800', fontSize: 11, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, overflow: 'hidden' }}>{text}</Text>

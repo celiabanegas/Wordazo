@@ -58,12 +58,16 @@ Deno.serve(async (req) => {
   const { data: u } = await admin.auth.getUser(jwt);
   if (!u?.user) return json({ error: "unauthorized" }, 401);
   const uid = u.user.id;
-  let lang = "en";
-  try { const b = await req.json(); if (LANG[b.lang]) lang = b.lang; } catch { /* por defecto inglés */ }
+  let lang = "en", page = 1;
+  try { const b = await req.json(); if (LANG[b.lang]) lang = b.lang; page = Math.max(1, Math.min(5, Number(b.page) || 1)); } catch { /* por defecto inglés */ }
 
+  // Se guardan por semana. Cada página son 9 nuevas; se piden más solo cuando el usuario quiere más (máximo 5 por semana).
   const week = monday();
   const { data: cached } = await admin.from("user_suggestions").select("items").eq("user_id", uid).eq("lang", lang).eq("week", week).maybeSingle();
-  if (cached) return json({ items: cached.items });
+  const prev = ((cached?.items ?? []) as { term: string; page?: number }[]);
+  const pages = prev.length ? Math.max(...prev.map((i) => i.page ?? 1)) : 0;
+  if (page <= pages) return json({ items: prev.filter((i) => (i.page ?? 1) === page) });
+  if (page > pages + 1) return json({ items: [] });
 
   const [{ data: words }, { data: prof }] = await Promise.all([
     admin.from("words").select("term, fails, box").eq("user_id", uid).eq("deck", lang).order("created_at", { ascending: false }).limit(60),
@@ -75,17 +79,18 @@ Deno.serve(async (req) => {
   const hard = words.filter((w) => w.fails >= 2 && w.box <= 2).map((w) => w.term).slice(0, 10);
   let text = "";
   try { text = await askAI(`Un hispanohablante joven de nivel ${LEVEL[prof?.level ?? "mid"]} aprende ${LANG[lang]}.
-Ya tiene guardadas: ${terms.join(", ")}.${hard.length ? ` Le cuestan: ${hard.join(", ")}.` : ""}
+Ya tiene guardadas: ${terms.join(", ")}.${hard.length ? ` Le cuestan: ${hard.join(", ")}.` : ""}${prev.length ? ` Ya le propusiste (no las repitas): ${prev.map((i) => i.term).join(", ")}.` : ""}
 Propón 9 palabras o expresiones nuevas de ${LANG[lang]} que le convenga aprender ahora y que NO estén en su lista. Mezcla palabras parecidas o relacionadas con las suyas, alternativas más usadas, falsos amigos frecuentes y vocabulario de los mismos temas.
 Responde SOLO con JSON: {"items":[{"term":"palabra","translation":"${lang === "es" ? "definición breve" : "traducción breve al español"}","reason":"motivo en máximo 5 palabras, p. ej. «Parecida a thorough» o «Falso amigo frecuente»"}]}`, 700); }
   catch (e) { console.error(String(e)); return json({ error: String(e).startsWith("Error: missing_key") ? "missing_key" : "upstream" }, 502); }
   try {
-    const have = new Set(terms.map((t) => t.toLowerCase()));
+    const have = new Set([...terms, ...prev.map((i) => i.term)].map((t) => t.toLowerCase()));
     const o = JSON.parse(text.match(/\{[\s\S]*\}/)![0]);
     const items = (o.items ?? [])
       .map((i: { term?: string; translation?: string; reason?: string }) => ({ term: String(i.term ?? "").trim(), translation: String(i.translation ?? "").trim(), reason: String(i.reason ?? "").trim() }))
-      .filter((i: { term: string }) => i.term && !have.has(i.term.toLowerCase())).slice(0, 9);
-    await admin.from("user_suggestions").upsert({ user_id: uid, lang, week, items });
+      .filter((i: { term: string }) => i.term && !have.has(i.term.toLowerCase())).slice(0, 9)
+      .map((i: object) => ({ ...i, page }));
+    await admin.from("user_suggestions").upsert({ user_id: uid, lang, week, items: [...prev, ...items] });
     return json({ items });
   } catch { return json({ error: "bad_reply" }, 502); }
 });

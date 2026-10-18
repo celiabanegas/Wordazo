@@ -21,7 +21,7 @@ Hecha con React Native (Expo) y Supabase.
 - **Una sola llamada por palabra:** trae traducción, ejemplos y opciones de los juegos. Los juegos no llaman a Claude.
 - **Paquetes de inicio:** se generan una vez por idioma, nivel y tema y se reutilizan.
 - **«Para ti»:** una vez por semana y por usuario.
-- **Límite:** 40 palabras nuevas cada 24 horas por usuario y respuestas cortas.
+- **Sin límite de palabras guardadas.** El límite diario de 40 está desactivado en la base de datos (disparador `words_daily_limit`); para volver a activarlo: `alter table public.words enable trigger words_daily_limit;`
 - **Pronunciación:** usa la voz del dispositivo, sin coste.
 
 ## Configuración pendiente (una sola vez)
