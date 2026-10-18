@@ -72,7 +72,9 @@ export default function AuthScreen() {
       options: { emailRedirectTo: origin(), data: { birthdate: birthIso, username } },
     });
     setBusy(false);
-    if (error) setMsg({ text: error.message.toLowerCase().includes('registered') ? 'Ese email ya tiene cuenta. Entra con él.' : 'No se pudo crear la cuenta. Revisa los datos e inténtalo de nuevo.' });
+    if (error) setMsg({ text: error.message.toLowerCase().includes('registered') ? 'Ese email ya tiene cuenta. Entra con él.'
+      : error.status === 429 || error.message.toLowerCase().includes('rate limit') ? 'Ya te hemos enviado un email hace poco. Míralo (también en spam) o espera un rato antes de pedir otro. También puedes entrar con Google.'
+      : 'No se pudo crear la cuenta. Revisa los datos e inténtalo de nuevo.' });
     // Si el email ya estaba registrado, Supabase no lo dice ni envía nada: lo detectamos aquí
     else if (data.user && (data.user.identities?.length ?? 0) === 0) setMsg({ text: 'Ese email ya tiene cuenta. Entra con «Continuar con Google» o con tu contraseña en «Entrar».' });
     else if (!data.session) setMsg({ text: 'Te hemos enviado un email. Abre el enlace para confirmar tu cuenta y vuelve a entrar. Si no llega, mira en la carpeta de spam.', ok: true });
