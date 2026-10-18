@@ -151,9 +151,6 @@ export function LanguageScreen({ profile, onSave }: { profile: Profile; onSave: 
           ))}
         </View>
       </Field>
-      <Field label="¿Cómo te llamas?" hint="Tus amigos verán solo tu nombre y la inicial del apellido.">
-        <TextInput style={inputStyle(t)} value={name} onChangeText={setName} placeholder="Tu nombre" placeholderTextColor={t.muted} maxLength={30} autoComplete="name" />
-      </Field>
       <View style={{ flex: 1 }} />
       <Btn big kind="accent" title={busy ? 'Un momento…' : 'Empezar'} onPress={save} disabled={busy || !name.trim()} />
     </Shell>
@@ -271,6 +268,8 @@ export function CompleteProfileScreen({ profile, onDone }: { profile: Profile; o
   const t = useTheme();
   const needBirth = !profile.birthdate;
   const needUser = !profile.username;
+  const needName = (profile.display_name || '').trim().length < 2;
+  const [name, setName] = useState((profile.display_name || '').trim());
   const [birth, setBirth] = useState('');
   const [u, setU] = useState(needUser ? cleanUsername((profile.display_name || '').replace(/\s+/g, '.')) : '');
   const [state, setState] = useState<'idle' | 'checking' | 'ok' | 'taken' | 'bad'>('idle');
@@ -290,12 +289,13 @@ export function CompleteProfileScreen({ profile, onDone }: { profile: Profile; o
     return () => clearTimeout(id);
   }, [u, needUser]);
 
-  const ready = (!needBirth || !!iso) && (!needUser || state === 'ok');
+  const ready = (!needName || name.trim().length >= 2) && (!needBirth || !!iso) && (!needUser || state === 'ok');
   const save = async () => {
     setBusy(true); setMsg('');
     const patch: Partial<Profile> = {};
     if (needBirth && iso) patch.birthdate = iso;
     if (needUser) patch.username = u;
+    if (needName) patch.display_name = name.trim().slice(0, 30);
     const { data, error } = await supabase.from('profiles').update(patch).eq('user_id', profile.user_id).select('*').single();
     setBusy(false);
     if (error || !data) {
@@ -311,8 +311,13 @@ export function CompleteProfileScreen({ profile, onDone }: { profile: Profile; o
       <Logo size={28} />
       <View style={{ gap: 6, marginTop: 20 }}>
         <Text style={{ color: t.ink, fontSize: 26, fontWeight: '800' }}>Completa tu perfil</Text>
-        <Text style={{ color: t.muted, fontSize: 15 }}>Solo te lo pedimos una vez.</Text>
+        <Text style={{ color: t.muted, fontSize: 15 }}>Todos los campos son obligatorios. Solo te lo pedimos una vez.</Text>
       </View>
+      {needName && (
+        <Field label="¿Cómo te llamas?" hint="Tus amigos verán tu nombre y la inicial del apellido.">
+          <TextInput style={inputStyle(t)} value={name} onChangeText={setName} placeholder="Tu nombre" placeholderTextColor={t.muted} maxLength={30} autoComplete="name" />
+        </Field>
+      )}
       {needUser && (
         <Field label="Nombre de usuario"
           hint={state === 'ok' ? `@${u} está libre` : state === 'taken' ? `@${u} ya está cogido. Prueba otro.` : state === 'bad' ? 'De 3 a 20 caracteres: letras, números, punto o guion bajo' : state === 'checking' ? 'Comprobando…' : 'Tus amigos te buscarán con este nombre'}

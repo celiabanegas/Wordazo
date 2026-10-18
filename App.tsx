@@ -93,7 +93,8 @@ function Gate({ session }: { session: Session }) {
 
   if (failed) return <Center><Text style={{ color: t.ink, marginBottom: 12 }}>No se pudo cargar tu cuenta.</Text><Text onPress={load} style={{ color: t.blue, fontWeight: '800' }}>Reintentar</Text></Center>;
   if (!profile) return <Center><ActivityIndicator color={t.muted} /></Center>;
-  if (!profile.birthdate || !profile.username) return <CompleteProfileScreen profile={profile} onDone={setProfile} />;
+  // Nombre, nombre de usuario y fecha de nacimiento son obligatorios (también para quien entra con Google)
+  if (!profile.birthdate || !profile.username || (profile.display_name || '').trim().length < 2) return <CompleteProfileScreen profile={profile} onDone={setProfile} />;
   if (ageFrom(profile.birthdate) < 14 && consent !== 'approved') {
     return <GuardianScreen profile={profile} onRecheck={load} onName={(n) => patch({ display_name: n })} />;
   }

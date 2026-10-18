@@ -17,6 +17,7 @@ export default function AuthScreen() {
   const [password2, setPassword2] = useState('');
   const [birth, setBirth] = useState('');
   const [username, setUsername] = useState('');
+  const [name, setName] = useState('');
   const [uState, setUState] = useState<'idle' | 'checking' | 'ok' | 'taken' | 'bad'>('idle');
   const [show, setShow] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -26,7 +27,8 @@ export default function AuthScreen() {
   const match = password2.length > 0 && password2 === password;
   const birthIso = parseBirthdate(birth);
   const emailOk = /^\S+@\S+\.\S+$/.test(email.trim());
-  const canSignUp = emailOk && pw.valid && match && !!birthIso && uState === 'ok';
+  const nameOk = name.trim().length >= 2;
+  const canSignUp = nameOk && emailOk && pw.valid && match && !!birthIso && uState === 'ok';
 
   // Comprueba si el nombre de usuario está libre mientras se escribe
   useEffect(() => {
@@ -69,7 +71,7 @@ export default function AuthScreen() {
     setBusy(true);
     const { data, error } = await supabase.auth.signUp({
       email: email.trim(), password,
-      options: { emailRedirectTo: origin(), data: { birthdate: birthIso, username } },
+      options: { emailRedirectTo: origin(), data: { birthdate: birthIso, username, full_name: name.trim() } },
     });
     setBusy(false);
     if (error) setMsg({ text: error.message.toLowerCase().includes('registered') ? 'Ese email ya tiene cuenta. Entra con él.'
@@ -133,6 +135,13 @@ export default function AuthScreen() {
           <TextInput style={inputStyle(t)} value={email} onChangeText={setEmail} autoCapitalize="none" autoComplete="email" keyboardType="email-address"
             textContentType="emailAddress" placeholder="tu@email.com" placeholderTextColor={t.muted} />
         </Field>
+
+        {mode === 'up' && (
+          <Field label="¿Cómo te llamas?" hint="Tus amigos verán tu nombre y la inicial del apellido.">
+            <TextInput style={inputStyle(t, name && !nameOk ? 'bad' : undefined)} value={name} onChangeText={setName} placeholder="Tu nombre" placeholderTextColor={t.muted}
+              maxLength={30} autoComplete="name" textContentType="name" />
+          </Field>
+        )}
 
         {mode === 'up' && (
           <Field label="Nombre de usuario"
