@@ -52,7 +52,9 @@ function buildQuestion(word: Word, pool: Word[], deck: Deck, retry: boolean): Q 
   return { word, reverse, prompt, answer, options: shuffle([{ text: answer, means: '' }, ...picked]), retry };
 }
 
-export default function ChoiceGame({ onExit, challengeId, hardOnly }: { onExit: () => void; challengeId?: string; hardOnly?: boolean }) {
+export default function ChoiceGame({ onExit, challengeId, hardOnly: hardProp }: { onExit: () => void; challengeId?: string; hardOnly?: boolean }) {
+  const [allWords, setAllWords] = useState(false); // tras repasar «Te cuesta» se puede seguir con todas
+  const hardOnly = !!hardProp && !allWords;
   const t = useTheme();
   const { words, patchWord, recordProgress, stats, lang: deck } = useStore();
   const pool = useMemo(() => playable(words, deck), [words, deck]);
@@ -214,7 +216,18 @@ export default function ChoiceGame({ onExit, challengeId, hardOnly }: { onExit: 
   }
 
   if (result) return <RoundSummary title={hardOnly ? 'Repaso de lo que te cuesta' : 'Reto Elige'} result={result} onAgain={() => setRoundKey((k) => k + 1)} onExit={onExit} />;
-  if (!q) return null;
+  if (!q) {
+    // Ronda vacía (p. ej. ya no queda ninguna en «Te cuesta»): nunca una pantalla en blanco
+    if (initialQueue.length) return null;
+    return (
+      <View style={{ flex: 1, padding: 20, justifyContent: 'center', gap: 14, maxWidth: 560, width: '100%', alignSelf: 'center' }}>
+        <Text style={{ color: t.ink, fontSize: 24, fontWeight: '800' }}>{hardOnly ? '¡Ya no se te atasca ninguna!' : 'No hay palabras para jugar'}</Text>
+        <Text style={{ color: t.muted, fontSize: 16 }}>{hardOnly ? 'Has acertado todas las que te costaban. Puedes seguir jugando con todas tus palabras.' : 'Las has sacado todas del juego. Puedes recuperarlas en Palabras → Mis palabras.'}</Text>
+        {hardOnly && <Btn big kind="accent" title="Jugar con todas" onPress={() => { setAllWords(true); setRoundKey((k) => k + 1); }} />}
+        <Btn title="Volver al inicio" kind={hardOnly ? 'ghost' : 'ink'} onPress={onExit} />
+      </View>
+    );
+  }
 
   const answeredState = picked !== null;
   const wrong = answeredState && norm(picked!) !== norm(q.answer);

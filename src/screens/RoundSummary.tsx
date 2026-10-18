@@ -82,7 +82,7 @@ export default function RoundSummary({ result, onAgain, onExit, title = 'Reto El
       )}
 
       <Btn title="Otra ronda" kind="accent" big onPress={onAgain} />
-      <Btn title="Volver" kind="ghost" onPress={onExit} />
+      <Btn title="Volver al inicio" kind="ghost" onPress={onExit} />
     </ScrollView>
   );
 }
