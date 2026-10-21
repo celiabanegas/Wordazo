@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Easing, Pressable, ScrollView, Text, View } from 'react-native';
+import { Animated, AppState, Easing, Pressable, ScrollView, Text, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { useStore } from '../lib/store';
 import { useTheme } from '../lib/theme';
@@ -116,6 +116,30 @@ export default function ChoiceGame({ onExit, challengeId, hardOnly: hardProp }: 
     return () => timer.stopAnimation();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [i, roundId]);
+
+  // Pausa: para el reloj y tapa la pregunta (para no pensar con el tiempo parado)
+  const [paused, setPaused] = useState(false);
+  const pickedRef = useRef(picked);
+  pickedRef.current = picked;
+  const pause = useCallback(() => {
+    if (pickedRef.current !== null) return; // ya respondida: el reloj no corre
+    timer.stopAnimation();
+    setPaused(true);
+  }, [timer]);
+  const resume = () => {
+    setPaused(false);
+    timer.stopAnimation((left) => {
+      Animated.timing(timer, { toValue: 0, duration: Math.max(0, left) * SECONDS * 1000, easing: Easing.linear, useNativeDriver: false }).start(({ finished }) => {
+        if (finished) setTimedOut(true);
+      });
+    });
+  };
+  // Si sales de la app o cambias de pestaña, se pausa sola
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (st) => { if (st !== 'active') pause(); });
+    return () => sub.remove();
+  }, [pause]);
+  useEffect(() => { setPaused(false); }, [i, roundId]);
 
   const finish = useCallback(async (f: { xp: number; answered: number; correct: number; maxCombo: number; lives: number; skipped: number }) => {
     if (f.lives > 0) clearOk(deck); // ronda completa: la siguiente empieza de cero
@@ -235,11 +259,30 @@ export default function ChoiceGame({ onExit, challengeId, hardOnly: hardProp }: 
   const total = queue.length;
   const targetText = q.reverse ? q.answer : q.prompt; // la palabra en el idioma que aprendes
 
+  if (paused) {
+    return (
+      <View style={{ flex: 1, padding: 20, justifyContent: 'center', gap: 14, maxWidth: 560, width: '100%', alignSelf: 'center' }}>
+        <Text style={{ color: t.ink, fontSize: 30, fontWeight: '800', textAlign: 'center' }}>Pausa</Text>
+        <Text style={{ color: t.muted, fontSize: 16, textAlign: 'center' }}>
+          Pregunta {i + 1} de {total} · {lives} {lives === 1 ? 'vida' : 'vidas'} · {xp} XP{'\n'}El reloj está parado.
+        </Text>
+        <Btn big kind="accent" title="Seguir jugando" onPress={resume} style={{ marginTop: 10 }} />
+        <Btn title="Salir de la partida" kind="ghost" onPress={onExit} />
+      </View>
+    );
+  }
+
   return (
     <ScrollView contentContainerStyle={{ padding: 16, gap: 12, flexGrow: 1, maxWidth: 560, width: '100%', alignSelf: 'center' }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
         <Pressable onPress={onExit} accessibilityRole="button" accessibilityLabel="Salir del reto" hitSlop={12}>
           <Text style={{ color: t.muted, fontSize: 22, fontWeight: '700' }}>✕</Text>
+        </Pressable>
+        <Pressable onPress={pause} disabled={answeredState} accessibilityRole="button" accessibilityLabel="Pausar" hitSlop={10}
+          style={({ pressed }) => ({ width: 34, height: 34, borderRadius: 10, borderWidth: 1, borderColor: t.line, backgroundColor: pressed ? t.line : t.card,
+            flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, opacity: answeredState ? 0.35 : 1 })}>
+          <View style={{ width: 4, height: 13, borderRadius: 1, backgroundColor: t.ink }} />
+          <View style={{ width: 4, height: 13, borderRadius: 1, backgroundColor: t.ink }} />
         </Pressable>
         <View style={{ flex: 1 }}><Bar pct={i / total} color={t.ink} height={10} /></View>
         <Text style={{ color: t.bad, fontSize: 18, letterSpacing: 2 }} accessibilityLabel={`${lives} vidas`}>
