@@ -1,4 +1,5 @@
 import type { Stats, Word } from './types';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { shuffle, todayStr } from './text';
 
 // Repaso espaciado: días hasta el siguiente repaso según la caja (1–5)
@@ -65,25 +66,32 @@ export const todayXp = (s: Stats) => (s.last_day === todayStr() ? s.today_xp : 0
 export const playable = (words: Word[], deck: string) =>
   words.filter((w) => w.deck === deck && w.status === 'ok' && w.meaning && !w.archived);
 
-// Elige pregunta todas las palabras del banco en cada ronda (cada una una vez, más una segunda oportunidad si la fallas)
-export const ROUND_SIZE = Number.POSITIVE_INFINITY;
+// Elige: 15 preguntas por ronda, cada una de una palabra distinta
+export const ROUND_SIZE = 15;
 // Última ronda de Elige: Tarjetas y Escribe repasan esas mismas palabras
 let lastRound: { deck: string; ids: string[] } | null = null;
 export const rememberRound = (deck: string, ids: string[]) => { lastRound = { deck, ids }; };
 
-// Acertadas en una ronda de Elige que no se terminó (te quedaste sin vidas): en la siguiente van al final
-const recentOk = new Map<string, Set<string>>();
-export const markOk = (deck: string, id: string) => { if (!recentOk.has(deck)) recentOk.set(deck, new Set()); recentOk.get(deck)!.add(id); };
-export const clearOk = (deck: string) => { recentOk.delete(deck); };
+// Rotación: cuándo salió cada palabra por última vez en Elige (se guarda en el dispositivo).
+// Las que nunca han salido van primero; las acertadas, al final de la cola; las falladas vuelven antes.
+const KEY = 'wz-ultima-vez';
+const DAY = 86400000;
+let askedAt: Record<string, number> = {};
+AsyncStorage.getItem(KEY).then((v) => { if (v) askedAt = { ...JSON.parse(v), ...askedAt }; }).catch(() => {});
+let saveTimer: ReturnType<typeof setTimeout> | null = null;
+export function markAsked(id: string, correct: boolean) {
+  askedAt[id] = Date.now() - (correct ? 0 : 2 * DAY);
+  if (saveTimer) clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => { AsyncStorage.setItem(KEY, JSON.stringify(askedAt)).catch(() => {}); }, 500);
+}
 
-/** Elige, Tarjetas y Escribe eligen las palabras igual: primero las que no acertaste en la ronda anterior, luego las que tocan repasar y las menos sabidas. */
+/** Elige elige las 15 que hace más tiempo que no salen (las nuevas primero); Tarjetas y Escribe repasan las de la última ronda de Elige. */
 export function pickRound(pool: Word[], deck: string, n = ROUND_SIZE, reuse = false): Word[] {
   if (reuse && lastRound?.deck === deck) {
     const byId = new Map(pool.map((w) => [w.id, w]));
     const same = lastRound.ids.map((id) => byId.get(id)).filter((w): w is Word => !!w);
     if (same.length) return shuffle(same);
   }
-  const ok = recentOk.get(deck);
-  const done = (w: Word) => Number(!!ok?.has(w.id));
-  return shuffle(pool).sort((a, b) => done(a) - done(b) || Number(isDue(b)) - Number(isDue(a)) || a.box - b.box).slice(0, n);
+  const at = (w: Word) => askedAt[w.id] ?? 0;
+  return shuffle(pool).sort((a, b) => at(a) - at(b) || a.box - b.box).slice(0, n);
 }

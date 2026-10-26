@@ -49,7 +49,7 @@ export default function PlayScreen({ onPlay, onAddWords }: { onPlay: (g: Game, o
           transform: [{ scale: pressed ? 0.98 : 1 }] })}>
         <View style={{ gap: 6 }}>
           <Text style={{ color: t.accentInk, fontSize: 44, fontWeight: '800', letterSpacing: -1.2 }}>Elige</Text>
-          <Text style={{ color: t.accentInk, fontSize: 17 }}>{ready.length} {ready.length === 1 ? 'pregunta' : 'preguntas'} · 3 vidas · contra el reloj</Text>
+          <Text style={{ color: t.accentInk, fontSize: 17 }}>{Math.min(15, ready.length)} {Math.min(15, ready.length) === 1 ? 'pregunta' : 'preguntas'} · 3 vidas · contra el reloj</Text>
           {due > 0 && <Text style={{ color: t.accentInk, fontSize: 15, fontWeight: '700', marginTop: 6 }}>Incluye tus {due} {due === 1 ? 'palabra' : 'palabras'} por repasar</Text>}
         </View>
         <View style={{ backgroundColor: t.accentInk, borderRadius: 16, paddingVertical: 16, alignItems: 'center' }}>
