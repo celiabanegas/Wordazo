@@ -1,0 +1,3 @@
+# Cabeceras para el alojamiento (Cloudflare Pages / Netlify)
+/sw.js
+  Cache-Control: no-cache
